@@ -24,7 +24,7 @@ import sys
 from typing import Any, Iterable
 
 from config_loader import load_config
-from extract_text import extract as extract_text
+from extract_text import SUPPORTED, extract as extract_text
 from extract_meta import extract_meta
 from note_utils import (
     check_title_style,
@@ -32,24 +32,11 @@ from note_utils import (
     compare_key,
     ensure_relative_folder,
     format_frontmatter,
+    is_sidecar,
     parse_bullets,
     sanitize_title,
     unique_name,
 )
-
-SUPPORTED = {".docx", ".md", ".txt"}
-
-
-def is_sidecar(path: Path) -> bool:
-    """Word lock files and macOS metadata are not sermons.
-
-    Word leaves "~$sermon.docx" behind while a document is open, and macOS drops
-    "._name" resource forks on non-native filesystems. Both look like supported
-    files and would otherwise become empty sermon notes.
-    """
-    name = path.name
-    return name.startswith("~$") or name.startswith("._") or name.startswith(".")
-
 
 def collect_inputs(input_path: Path, config: dict[str, Any] | None = None) -> list[Path]:
     """Collect sermon files, honouring input.file_types.
@@ -240,7 +227,7 @@ def sanitize_llm_fragments(raw: Any, config: dict[str, Any], warnings: list[str]
     return fragments
 
 
-def sanitize_word(raw: Any, config: dict[str, Any], warnings: list[str]) -> dict[str, list[str]]:
+def sanitize_word(raw: Any, config: dict[str, Any], warnings: list[str], sermon_kind: str = "") -> dict[str, list[str]]:
     cls = config["classification"]
     if not isinstance(raw, dict):
         raise ValueError("word entry must be an object")
@@ -251,8 +238,22 @@ def sanitize_word(raw: Any, config: dict[str, Any], warnings: list[str]) -> dict
         "route": validate_allowed(raw.get("route", []), cls.get("route_values", []), warnings, "route"),
         "doctrine": validate_allowed(raw.get("doctrine", []), cls.get("doctrine_values", []), warnings, "doctrine", allow_unknown),
     }
+    if not out["world"] and sermon_kind:
+        # 설교 구분에 짝지어 둔 World 값이 있으면 그것으로 채운다. 목사님이 온보딩에서
+        # 확인한 대응이므로, LLM 제안이 허용 목록에서 걸러졌을 때의 안전한 기본값이다.
+        mapped = str(((config.get("sermon_kinds") or {}).get("world_by_kind") or {}).get(sermon_kind, "")).strip()
+        if mapped:
+            out["world"] = validate_allowed([mapped], cls.get("world_values", []), warnings,
+                                            f"world({sermon_kind} 기본값)")
     out["tags"] = validate_tags(raw.get("tags", []), warnings, "tags")
     return out
+
+
+def main_folder_for(vault: Path, config: dict[str, Any], sermon_kind: str) -> Path:
+    """구분별 폴더가 지정돼 있으면 그 폴더, 없으면 기본 설교 폴더."""
+    routed = str(((config.get("sermon_kinds") or {}).get("folder_by_kind") or {}).get(sermon_kind, "")).strip()
+    folder = routed or config["output"]["main_sermon_folder"]
+    return vault / ensure_relative_folder(folder)
 
 
 def apply_pattern(pattern: str, values: dict[str, str]) -> str:
@@ -287,6 +288,11 @@ def render_main_note(meta: dict[str, Any], text: str, fragments: list[dict[str, 
         fields["doctrine"] = decorate_values(word.get("doctrine", []), wrap)
     if word and word.get("tags"):
         fields["tags"] = word["tags"]
+    kinds = config.get("sermon_kinds") or {}
+    kind_key = str(kinds.get("frontmatter_key") or "").strip()
+    if kind_key and meta.get("sermon_kind"):
+        # 구분을 속성으로 남기면 폴더를 나누지 않아도 검색·Dataview 로 갈라 볼 수 있다.
+        fields[kind_key] = meta["sermon_kind"]
     fields[bible_key] = ok_bible_links
     # Provenance fields come after the classification block so the fields the
     # pastor's guideline orders (created → … → 성경구절) stay in that order.
@@ -396,7 +402,7 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
     vault = Path(config["vault"]["path"]).expanduser()
     if not vault.exists():
         raise FileNotFoundError(f"vault not found: {vault}")
-    main_folder = vault / ensure_relative_folder(config["output"]["main_sermon_folder"])
+    # 구분별 폴더는 파일마다 달라질 수 있어 아래 루프에서 정한다.
     fragment_folder = vault / ensure_relative_folder(config["output"]["fragment_folder"])
     log_folder = vault / ensure_relative_folder(config["output"]["log_folder"])
     # collision_policy 는 메인 노트 전용, fragment_collision_policy 는 조각 전용.
@@ -418,6 +424,8 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
             extracted = extract_text(source)
             text = str(extracted["text"])
             meta = extract_meta(source, text, config)
+            warnings.extend(str(w) for w in (extracted.get("warnings") or []))
+            sermon_kind = str(meta.get("sermon_kind") or "")
             main_name = apply_pattern(config["naming"]["main_note_pattern"], {
                 "date": meta.get("date", ""),
                 "yymmdd": meta.get("yymmdd", ""),
@@ -425,9 +433,12 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
                 "main_passage": meta.get("main_passage", ""),
                 "sermon_id": meta["sermon_id"],
                 "target": meta.get("target", ""),
+                "kind": sermon_kind,
             })
             main_name = unique_name(main_name.removesuffix(".md"), used_main_names)
-            main_path = main_folder / main_name
+            main_path = main_folder_for(vault, config, sermon_kind) / main_name
+            if config.get("sermon_kinds", {}).get("enabled") and not sermon_kind:
+                warnings.append(f"설교 구분을 알 수 없습니다 — 기본 폴더에 넣습니다: {source.name}")
 
             raw_fragments = lookup_injection(llm_fragments, source)
             if raw_fragments is not None:
@@ -443,7 +454,7 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
             if config["classification"].get("use_word"):
                 raw_word = lookup_injection(llm_word, source)
                 if raw_word is not None:
-                    word = sanitize_word(raw_word, config, warnings)
+                    word = sanitize_word(raw_word, config, warnings, sermon_kind)
                 else:
                     warnings.append("WORD 제안 없음 — 분류 frontmatter를 비워 둠")
 
@@ -461,6 +472,7 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
                     "date": meta.get("date", ""),
                     "yymmdd": meta.get("yymmdd", ""),
                     "target": meta.get("target", ""),
+                    "kind": sermon_kind,
                 }
                 frag_name = apply_pattern(config["naming"]["fragment_note_pattern"], pattern_values)
                 frag_name = unique_name(frag_name.removesuffix(".md"), used_fragment_names)
@@ -516,11 +528,13 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
                 "meta": meta,
                 "fragment_mode": fragment_mode,
                 "word": word,
+                "sermon_kind": sermon_kind,
                 "main": {
                     "path": str(main_path),
                     "basename": main_basename,
                     "exists": main_path.exists(),
                     "action": main_action,
+                    "sermon_kind": sermon_kind,
                     "content": render_main_note(meta, text, fragment_outputs, word, config),
                 },
                 "fragments": fragment_outputs,
@@ -537,10 +551,14 @@ def summarize_plan(plan: dict[str, Any]) -> dict[str, Any]:
     merges = []
     skips = []
     warnings = []
+    by_kind: dict[str, int] = {}
     for item in plan["items"]:
         main = item["main"]
         main_action = main.get("action", "create")
-        files.append({"kind": "main", "path": main["path"], "exists": main["exists"], "action": main_action})
+        sermon_kind = str(item.get("sermon_kind") or "")
+        by_kind[sermon_kind or "(구분 없음)"] = by_kind.get(sermon_kind or "(구분 없음)", 0) + 1
+        files.append({"kind": "main", "path": main["path"], "exists": main["exists"],
+                      "action": main_action, "sermon_kind": sermon_kind})
         if main_action == "conflict":
             conflicts.append(main["path"])
         for frag in item["fragments"]:
@@ -565,6 +583,7 @@ def summarize_plan(plan: dict[str, Any]) -> dict[str, Any]:
         "sources": len(plan["items"]),
         "failed_sources": len(plan.get("failures", [])),
         "planned_files": len(files),
+        "by_sermon_kind": by_kind,
         "fragment_modes": {item["source"]: item.get("fragment_mode", "") for item in plan["items"]},
         "conflicts": conflicts,
         "merges": merges,
@@ -589,18 +608,21 @@ def write_plan(plan: dict[str, Any], config: dict[str, Any]) -> Path:
 
     for item in plan["items"]:
         main_path = Path(item["main"]["path"])
+        sermon_kind = str(item.get("sermon_kind") or "")
         if item["main"].get("action") == "skip":
             # Skip the whole sermon so no fragment points at an unchanged main note.
             skipped.append(str(main_path))
             skipped.extend(frag["path"] for frag in item["fragments"])
-            files_log.append({"path": str(main_path), "kind": "main", "action": "skip"})
+            files_log.append({"path": str(main_path), "kind": "main", "action": "skip",
+                              "sermon_kind": sermon_kind})
             continue
         if main_path.exists():
             raise FileExistsError(f"existing note appeared before write: {main_path}")
         main_path.parent.mkdir(parents=True, exist_ok=True)
         main_path.write_text(item["main"]["content"], encoding="utf-8")
         written.append(str(main_path))
-        files_log.append({"path": str(main_path), "kind": "main", "action": "create"})
+        files_log.append({"path": str(main_path), "kind": "main", "action": "create",
+                          "sermon_kind": sermon_kind})
 
         for frag in item["fragments"]:
             frag_path = Path(frag["path"])

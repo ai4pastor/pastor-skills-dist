@@ -63,6 +63,56 @@ def folder_target(path: Path, config: dict[str, Any]) -> str:
     return ""
 
 
+def resolve_sermon_kind(path: Path, target: str, config: dict[str, Any]) -> str:
+    """설교 구분(주일대예배·수요기도회·새벽기도회 …)을 정한다.
+
+    순서는 파일명 표시 → 폴더 이름 → 빈 값이다. 목회 현장은 예배 이름이 교회마다
+    달라서 짐작하지 않는다 — sermon_kinds.values 에 목사님이 선언한 구분과
+    marker_to_kind 로 이어지는 것만 인정하고, 못 찾으면 비워 둔 채 보고한다.
+    """
+    kinds = config.get("sermon_kinds") or {}
+    declared = [str(v).strip() for v in (kinds.get("values") or []) if str(v).strip()]
+    if not declared:
+        return ""
+    by_key = {compare_key(v): v for v in declared}
+    marker_map = {compare_key(k): str(v).strip() for k, v in (kinds.get("marker_to_kind") or {}).items()}
+
+    def lookup(token: str) -> str:
+        if not token:
+            return ""
+        key = compare_key(token)
+        if key in by_key:            # 파일명·폴더에 정식 구분명이 그대로 있는 경우
+            return by_key[key]
+        mapped = marker_map.get(key)  # "새벽" → "새벽기도회"
+        if mapped and compare_key(mapped) in by_key:
+            return by_key[compare_key(mapped)]
+        return ""
+
+    hit = lookup(target)
+    if hit:
+        return hit
+    strip_prefix = config.get("naming", {}).get("folder_number_prefix_strip", True)
+    for parent in list(path.parents)[:3]:
+        name = parent.name
+        if strip_prefix:
+            name = re.sub(r"^\d+[.\-]?\s*", "", name)
+        hit = lookup(name)
+        if hit:
+            return hit
+
+    # 마지막 수단: 파일명 어디에든 구분 이름이나 표시가 들어 있는 경우
+    # ("260201 새벽기도회 은혜.docx"). 폴더 판정을 먼저 한 뒤에 보는 이유는,
+    # "새벽에 부르시는 하나님" 같은 제목을 구분으로 오독하지 않기 위해서다.
+    stem_key = compare_key(path.stem)
+    for token, kind in sorted(marker_map.items(), key=lambda kv: -len(kv[0])):
+        if token and token in stem_key and compare_key(kind) in by_key:
+            return by_key[compare_key(kind)]
+    for key, value in sorted(by_key.items(), key=lambda kv: -len(kv[0])):
+        if key and key in stem_key:
+            return value
+    return ""
+
+
 def parse_filename(path: Path, config: dict[str, Any] | None = None) -> dict[str, str]:
     """Split a file name into date / audience marker / title.
 
@@ -134,6 +184,7 @@ def extract_meta(path: Path, text: str, config: dict[str, Any]) -> dict[str, Any
         "date": meta.get("date", ""),
         "yymmdd": compact_date(meta.get("date", "")),
         "target": meta.get("target", ""),
+        "sermon_kind": resolve_sermon_kind(path, meta.get("target", ""), config),
         "title": meta.get("title", "untitled"),
         "main_passage": main_passage,
         "sermon_id": sermon_id,

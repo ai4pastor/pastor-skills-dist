@@ -35,6 +35,15 @@ def work_dir() -> Path:
     return home() / "work"
 
 
+def pylibs_dir() -> Path:
+    """Isolated install target for the optional converters (pypdf, pyhwp, …).
+
+    Kept under home() so the pastor's system Python stays untouched and an
+    isolated test environment redirects it with the same one variable.
+    """
+    return home() / "tools" / "pylibs"
+
+
 def default_config() -> dict[str, Any]:
     """The contract. Allow-lists stay empty here on purpose.
 
@@ -46,8 +55,18 @@ def default_config() -> dict[str, Any]:
     return {
         "version": 2,
         "vault": {"path": ""},
-        "input": {"sermon_sources": [], "file_types": ["docx", "md", "txt"]},
+        "input": {"sermon_sources": [], "file_types": ["docx", "md", "txt", "pdf", "hwpx", "hwp"]},
         "output": {"main_sermon_folder": "", "fragment_folder": "", "log_folder": ".vault-sermon-import/logs"},
+        # 설교 구분(주일대예배·수요기도회·새벽기도회 …). 값은 온보딩에서만 채운다 —
+        # 목회 현장마다 예배 이름이 달라 기본값을 심으면 남의 볼트에서 곧바로 어긋난다.
+        "sermon_kinds": {
+            "enabled": False,
+            "values": [],
+            "marker_to_kind": {},
+            "frontmatter_key": "설교구분",
+            "folder_by_kind": {},
+            "world_by_kind": {},
+        },
         "naming": {
             "main_note_pattern": "{date}_{title}_{main_passage}.md",
             "fragment_note_pattern": "{sermon_id}_{title}.md",
@@ -129,6 +148,41 @@ def save_config(config: dict[str, Any], path: str | Path | None = None) -> Path:
     return p
 
 
+def validate_sermon_kinds(kinds: Any) -> None:
+    """Check the sermon-kind block.
+
+    The block is optional so a config written before it existed still loads
+    (merge_defaults fills it in on the load path). Mapping keys are required to
+    be declared kinds: a typo in folder_by_kind would otherwise route sermons to
+    the default folder silently, which the pastor only notices much later.
+    """
+    if kinds is None:
+        return
+    if not isinstance(kinds, dict):
+        raise ValueError("sermon_kinds must be an object")
+    values = kinds.get("values", [])
+    if not isinstance(values, list) or any(not isinstance(v, str) for v in values):
+        raise ValueError("sermon_kinds.values must be a list of strings")
+    if not isinstance(kinds.get("frontmatter_key", ""), str):
+        raise ValueError("sermon_kinds.frontmatter_key must be a string")
+    declared = {v.strip() for v in values if v.strip()}
+    if kinds.get("enabled") and not declared:
+        raise ValueError("sermon_kinds.enabled is true but sermon_kinds.values is empty")
+    for key in ("marker_to_kind", "folder_by_kind", "world_by_kind"):
+        mapping = kinds.get(key, {})
+        if not isinstance(mapping, dict):
+            raise ValueError(f"sermon_kinds.{key} must be an object")
+        # marker_to_kind maps marker → kind; the other two map kind → value.
+        referenced = list(mapping.values()) if key == "marker_to_kind" else list(mapping)
+        unknown = sorted({str(v).strip() for v in referenced if str(v).strip()} - declared)
+        if unknown:
+            raise ValueError(f"sermon_kinds.{key} refers to undeclared kinds: {', '.join(unknown)}")
+    for kind, folder in (kinds.get("folder_by_kind") or {}).items():
+        p = Path(str(folder))
+        if p.is_absolute() or ".." in p.parts:
+            raise ValueError(f"sermon_kinds.folder_by_kind['{kind}'] must be a vault-relative folder: {folder}")
+
+
 def validate_config(config: dict[str, Any]) -> None:
     missing = REQUIRED_TOP_LEVEL - set(config)
     if missing:
@@ -155,6 +209,8 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("naming.target_markers must be a list")
     if not isinstance(naming.get("folder_to_target", {}), dict):
         raise ValueError("naming.folder_to_target must be an object")
+    validate_sermon_kinds(config.get("sermon_kinds"))
+
     if not isinstance(config["classification"].get("require_value_prefix", {}), dict):
         raise ValueError("classification.require_value_prefix must be an object")
     if config["classification"].get("use_word"):

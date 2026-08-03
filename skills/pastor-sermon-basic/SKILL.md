@@ -1,14 +1,14 @@
 ---
 name: pastor-sermon-basic
-description: 설교 파일(.docx/.md/.txt)을 Obsidian에 정리하는 가장 간단한 방법. 폴더 위치 몇 개만 답하면 메인 설교 노트 + 설교 조각 노트 + 성경구절 링크가 자동으로 만들어진다. 트리거 — "/pastor-sermon-basic", "설교 정리해줘", "설교 옵시디언에 넣어줘", "설교 임포트 쉽게".
+description: 설교 파일(.docx/.hwp/.hwpx/.pdf/.md/.txt)을 Obsidian에 정리하는 가장 간단한 방법. 원고가 구글 드라이브·원드라이브에 있어도 찾아서 가져오고, 설교 구분(대예배·수요·새벽)을 물어 나눠 준다. 트리거 — "/pastor-sermon-basic", "설교 정리해줘", "설교 옵시디언에 넣어줘", "설교 임포트 쉽게".
 ---
 
 # pastor-sermon-basic
 
 설교를 Obsidian에 정리하는 **가장 간단한 경로**다.
 
-목사님이 답할 것은 폴더 위치뿐이다. 파일명 규칙·분류 방식·저장 형식은
-스킬이 볼트를 읽어 추론하고 **확인만 받는다**.
+목사님이 답할 것은 **어디서 가져와, 어떻게 나눠서, 어디에 넣을지**뿐이다.
+파일명 규칙·분류 방식·저장 형식은 스킬이 컴퓨터와 볼트를 읽어 추론하고 **확인만 받는다**.
 
 만들어지는 것은 세밀한 설정 버전(`pastor-sermon-import`)과 같다:
 
@@ -41,52 +41,86 @@ python3 scripts/paths.py --ensure
 
 ---
 
-## A. 첫 설정 (한 번만, 5분)
+## A. 첫 설정 (한 번만)
 
 `prompts/onboarding.md`를 따라 **한 번에 한 질문씩** 진행한다.
-질문은 5개이고, 나머지는 아래 두 스크립트가 대신 답한다.
+질문은 7개이고, 나머지는 아래 스크립트들이 대신 답한다.
 
-### A-1. 볼트를 읽어 후보를 만든다
+### A-1. 볼트와 원고 위치를 찾는다
 
-목사님이 볼트 경로를 알려주면 곧바로:
+```bash
+python3 scripts/find_sources.py --vaults     # 옵시디언 볼트 후보
+python3 scripts/find_sources.py             # 설교 원고 폴더 후보
+```
+
+`find_sources.py`는 구글 드라이브·원드라이브·드롭박스·iCloud·문서·다운로드까지 훑어
+폴더별 **형식별 개수·최근 수정일·예시 파일명**을 돌려준다.
+**설교 원고가 어디 있는지는 항상 여쭤본다** — 볼트 안에 있다고 가정하지 않는다.
+
+볼트 경로를 받으면 곧바로:
 
 ```bash
 python3 scripts/suggest_folders.py "{볼트 경로}"
 ```
 
 - `sermon_folders` / `fragment_folders` / `bible_folders` — 폴더 후보 (점수·노트 수 포함)
-- `word_notes` — 분류 정리 노트 후보 (어느 축이 몇 개 발견됐는지)
+- `word_notes` — 분류 정본 후보 (템플릿 폴더·900번대 세팅 폴더를 먼저 본다)
+- `sermon_templates` — 설교 템플릿과 그 frontmatter 키 순서
 
 **후보를 그대로 선택지로 제시한다.** 빈칸을 타이핑하게 두지 않는다.
-후보가 없으면 새로 만들 폴더 이름을 여쭤본다.
 
-### A-2. 파일명 규칙을 추론한다
+### A-2. 형식을 확인하고 필요한 도구를 준비한다
 
-설교 원본 폴더를 알려주면:
+```bash
+python3 scripts/scan_inputs.py "{설교 폴더}"
+```
+
+- `by_suffix` — 워드·한글·PDF가 각각 몇 편인지
+- `skipped[].note` — 건너뛴 이유 (구글 드라이브 링크 파일 `.gdoc`, 워드 잠금 파일 `~$`,
+  아직 안 내려온 0바이트 파일, 미지원 형식)
+- `ask_install` — 이 문구로 **한 번** 여쭙고, 승인 뒤에만 설치한다
+- `ask_undeclared` — 설정에 없는 형식이 있을 때 함께 가져올지 여쭤본다
+
+```bash
+python3 scripts/ensure_tools.py --check
+python3 scripts/ensure_tools.py --install pdf,hwp     # 승인 뒤에만
+```
+
+설치는 **스킬 전용 폴더**(`<설정 홈>/tools/pylibs`)에만 한다. 실패하면 수동 방법
+(한글에서 `.txt`·`.hwpx` 로 저장 등)을 안내하고, 읽을 수 있는 파일부터 진행한다.
+
+### A-3. 설교 구분을 정한다
 
 ```bash
 python3 scripts/guess_naming.py "{설교 폴더}"
 ```
 
+- `sermon_kinds_detected` — 폴더·파일명에서 찾은 구분 (주일대예배·수요기도회·새벽기도회 …)
+- `sermon_kind_hits` — 어디서 찾았는지 (폴더 / 파일명 표시 / 파일명 어디든)
 - `date_kind`·`date_ratio` — 날짜 표기와 그 비율
-- `target_markers` — 2회 이상 반복된 대상 표시만 인정 (한 번만 나온 토큰은 제목 첫 단어일 가능성이 높아 제외)
-- `folder_to_target` — 폴더명에서 추론한 대상 대응
-- `suggested` — config에 그대로 넣을 값
+- `target_markers` — 위치 기반 표시만 인정 (한 번만 나온 두 글자 이상 토큰은 제목
+  첫 단어일 수 있어 제외)
+- `pattern_options` — 구분을 파일명에 넣는 형식 / 짧은 표시 / 구분 없음
+- `suggested` — config에 그대로 넣을 값 (`naming.*` + `sermon_kinds.*`)
 - `samples` — 실제 파일 6개를 어떻게 읽었는지
 
-**`explain`과 `samples`를 목사님께 보여주고 "이렇게 읽었습니다, 맞습니까?"로 확인만 받는다.**
-틀리면 고치고, 맞으면 `suggested`를 그대로 config에 넣는다.
+**`explain`과 `samples`를 보여주고 "이렇게 읽었습니다, 맞습니까?"로 확인만 받는다.**
+그다음 노트에서 어떻게 나눌지 여쭤본다 — 속성 / 파일명 / 구분별 폴더 (권장: 속성+파일명).
 
-### A-3. 분류(WORD)
+### A-4. 분류(WORD)
 
 `suggest_folders.py`의 `word_notes`에 후보가 있으면:
 
 ```bash
-python3 scripts/parse_word_source.py "{볼트}/{후보 경로}"
+python3 scripts/parse_word_source.py "{볼트}/{후보 경로}" --sermon-only
 ```
 
-인식한 개수(World·Outcome·Route·Doctrine)를 보여주고 확인받는다.
-후보가 없으면 두 가지를 제시한다 — 강의 표준 프리셋(`data/word_preset.a4p.json`)을
+`--sermon-only`는 **설교에 쓰이는 값만** 골라 준다 — 설교 성격의 World 값,
+Outcome `설교`, Route는 `완료` 추천, Doctrine은 목사님 목록 전체(신학 주제는
+설교마다 다르다). `sermon_subset.ask` 의 질문을 순서대로 여쭤본다.
+
+후보가 없으면 `python3 scripts/find_word_template.py "{볼트}"` 로 한 번 더 찾고,
+그래도 없으면 두 가지를 제시한다 — 강의 표준 프리셋(`data/word_preset.a4p.json`)을
 쓸지, 분류 없이 쓸지.
 
 분류를 쓰기로 하면 아래를 **함께 켠다** (따로 묻지 않는다):
@@ -98,10 +132,12 @@ python3 scripts/parse_word_source.py "{볼트}/{후보 경로}"
 "fragment_world": "{조각용 World 값}"
 ```
 
-조각용 World 값은 프리셋의 `axes.world.fragment_recommended`, 또는 목사님 분류 노트에서
-조각·영감 성격의 값을 찾아 제안한다.
+구분마다 붙일 World 값도 확인해 `sermon_kinds.world_by_kind`에 넣는다.
+프리셋이면 `axes.world.kind_hint`가 제안값이다.
+조각용 World 값은 프리셋의 `axes.world.fragment_recommended`, 또는 목사님 분류표의
+`sermon_subset.world.fragment_candidate`를 제안한다.
 
-### A-4. 나머지는 고정값
+### A-5. 나머지는 고정값
 
 묻지 않고 아래로 정한다.
 
@@ -113,7 +149,7 @@ python3 scripts/parse_word_source.py "{볼트}/{후보 경로}"
 | 같은 이름 조각 | `skip` (기존 조각 유지, 링크만 연결) | 기존 노트를 건드리지 않는 가장 보수적인 선택 |
 | 로그 | `.vault-sermon-import/logs` | 볼트 안, 눈에 띄지 않는 위치 |
 
-### A-5. 저장
+### A-6. 저장
 
 완성된 config 미리보기를 보여주고 `"OK 저장"` 승인을 받은 뒤 `{config}`에 저장한다.
 그다음 `python3 scripts/config_loader.py "{config}"`로 유효성을 확인하고,
@@ -127,11 +163,12 @@ python3 scripts/parse_word_source.py "{볼트}/{후보 경로}"
 
 ```bash
 python3 scripts/config_loader.py "{config}"
-python3 scripts/scan_inputs.py "{입력 경로}"
+python3 scripts/scan_inputs.py "{입력 경로}" --config "{config}"
 ```
 
-지원 형식은 `.docx`(pandoc 또는 python-docx 필요) / `.md` / `.txt`.
-미지원 파일은 건너뛰고 보고에 남긴다.
+지원 형식은 `.docx` / `.hwp` / `.hwpx` / `.pdf` / `.md` / `.txt`.
+`ask_install` 이 있으면 승인받아 `ensure_tools.py --install` 을 먼저 돌린다.
+건너뛴 파일은 이유와 함께 보고에 남긴다.
 
 ### B-2. 텍스트 추출 (파일별)
 
@@ -140,6 +177,8 @@ python3 scripts/extract_text.py "{파일 경로}"
 ```
 
 JSON의 `text`가 분석 대상 본문이다. 원본 파일은 읽기 전용이다.
+`warnings` 가 있으면 목사님께 그대로 전한다 — `scanned_pdf`(글자 없는 스캔 이미지)와
+`short_text`(본문이 200자 미만)는 그 설교를 그냥 넘기면 빈 노트가 된다는 신호다.
 
 ### B-3. 조각 분해
 
@@ -194,8 +233,8 @@ python3 scripts/build_notes.py "{입력 경로}" \
   --config "{config}" --fragments "{fragments}" --word "{word}"
 ```
 
-목사님께 보여줄 것: 만들어질 파일 목록, 조각 제목들, 충돌(`conflicts`),
-건너뜀(`skips`), 경고(`warnings`), 분류 제안값.
+목사님께 보여줄 것: 만들어질 파일 목록, 조각 제목들, 구분별 편수(`by_sermon_kind`),
+충돌(`conflicts`), 건너뜀(`skips`), 경고(`warnings`), 분류 제안값.
 
 경고에 "허용 목록 밖 값 제외"가 있으면 B-3~B-4의 JSON을 고쳐 다시 미리보기한다.
 
@@ -223,11 +262,12 @@ python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
 ### B-8. 보고
 
 ```text
-정리 완료: {N}편
+정리 완료: {N}편  ({구분별 편수})
 메인 노트: {경로}
 설교 조각: 신규 {A}개 · 건너뜀 {B}개
 성경구절: {M}개 링크 · 확인 필요 {K}개
 분류: {요약, 분류를 쓸 때}
+읽지 못한 파일: {있으면 이유와 함께}
 경고: {있으면}
 로그: {manifest 경로}
 ```
@@ -249,9 +289,12 @@ python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
 ## 제공 스크립트
 
 - `scripts/paths.py` — 설정·작업파일 경로 (모든 단계의 경로 출처)
-- `scripts/suggest_folders.py` — 볼트를 읽어 폴더·분류 노트 후보 제시
-- `scripts/guess_naming.py` — 설교 파일명 규칙 추론
-- `scripts/parse_word_source.py` — 분류 노트에서 허용 목록 추출
+- `scripts/find_sources.py` — 컴퓨터에서 볼트·설교 원고 폴더 찾기 (클라우드 포함)
+- `scripts/suggest_folders.py` — 볼트를 읽어 폴더·분류 정본·설교 템플릿 후보 제시
+- `scripts/find_word_template.py` — 옵시디언 템플릿 폴더 설정·900번대 세팅 폴더에서 분류 정본 찾기
+- `scripts/guess_naming.py` — 설교 구분과 파일명 규칙 추론
+- `scripts/parse_word_source.py` — 분류 노트에서 허용 목록 추출 (`--sermon-only`: 설교용 부분집합)
+- `scripts/ensure_tools.py` — 형식별 변환 도구 점검·격리 설치
 - `scripts/list_fragments.py` — 기존 조각 제목 목록
 - `scripts/config_loader.py` — 설정 로드·검증
 - `scripts/scan_inputs.py` · `extract_text.py` · `extract_meta.py` · `extract_bible_refs.py`

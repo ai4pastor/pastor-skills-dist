@@ -1,6 +1,6 @@
 ---
 name: pastor-sermon-import
-description: 목회자의 기존 설교 파일(.docx/.md/.txt)을 개인 Obsidian vault 구조에 맞게 메인 설교 노트 + 설교 조각 노트 + 성경구절 wikilink + WORD/분류 frontmatter로 자동 import하는 스킬. 트리거 — "/pastor-sermon-setup", "/pastor-sermon-import [경로]", "설교 옵시디언으로 정리해줘", "설교 import".
+description: 목회자의 기존 설교 파일(.docx/.hwp/.hwpx/.pdf/.md/.txt)을 개인 Obsidian vault 구조에 맞게 메인 설교 노트 + 설교 조각 노트 + 성경구절 wikilink + WORD/분류 frontmatter로 자동 import하는 스킬. 원고가 구글 드라이브·원드라이브에 있어도 찾아서 가져오고, 설교 구분(대예배·수요·새벽)별로 나눠 준다. 트리거 — "/pastor-sermon-setup", "/pastor-sermon-import [경로]", "설교 옵시디언으로 정리해줘", "설교 import".
 ---
 
 # pastor-sermon-import
@@ -28,9 +28,17 @@ description: 목회자의 기존 설교 파일(.docx/.md/.txt)을 개인 Obsidia
 절차:
 
 0. `python3 scripts/paths.py --ensure`를 실행한다. 출력의 `config` 값이 아래에서 쓸 `{config}`다.
-1. `prompts/onboarding.md`의 질문 순서대로 인터뷰한다.
-   - 6번(분류 체계)에서 목사님이 **강의 표준 프리셋**을 고르면 `data/word_preset.a4p.json`을 읽어 허용 목록을 채운다. 프리셋은 목사님이 고른 뒤에만 config로 들어간다 — 기본값으로 심지 않는다.
-   - **목사님이 이미 쓰는 분류 노트**가 있으면 `python3 scripts/parse_word_source.py "{노트 경로}"`로 읽는다. 그 노트는 수정하지 않는다.
+1. `prompts/onboarding.md`의 질문 순서대로 인터뷰한다. 묻기 전에 후보를 만든다:
+   - `python3 scripts/find_sources.py --vaults` / `python3 scripts/find_sources.py` —
+     볼트와 **설교 원고 폴더**(구글 드라이브·원드라이브·iCloud 포함) 후보
+   - `python3 scripts/suggest_folders.py "{볼트}"` — 저장 폴더·분류 정본·설교 템플릿 후보
+   - `python3 scripts/find_word_template.py "{볼트}"` — 옵시디언 템플릿 폴더 설정과
+     900번대 세팅 폴더에서 분류 정본 찾기
+   - `python3 scripts/guess_naming.py "{설교 폴더}"` — 설교 구분·날짜·파일명 규칙 추론
+   - `python3 scripts/scan_inputs.py "{설교 폴더}"` → `ask_install` 이 있으면 그 문구로
+     한 번 여쭙고 승인 뒤 `python3 scripts/ensure_tools.py --install {형식}`
+   - 9번(분류 체계)에서 **강의 표준 프리셋**을 고르면 `data/word_preset.a4p.json`을 읽어 허용 목록을 채운다. 프리셋은 목사님이 고른 뒤에만 config로 들어간다 — 기본값으로 심지 않는다.
+   - **목사님이 이미 쓰는 분류 노트**가 있으면 `python3 scripts/parse_word_source.py "{노트 경로}" --sermon-only`로 읽는다. 설교에 쓰이는 값만 확인하면 된다. 그 노트는 수정하지 않는다.
 2. 답변으로 config JSON을 구성한다. 형식은 `examples/config.example.json`과 동일해야 한다.
 3. 완성된 config 미리보기를 보여주고 "OK 저장" 승인을 받는다.
 4. `{config}`에 저장한다.
@@ -53,12 +61,15 @@ python3 scripts/paths.py --ensure
 ### Step 1. 준비 확인
 
 ```bash
-python3 scripts/config_loader.py "{config}"      # 설정 유효성
-python3 scripts/scan_inputs.py "{입력 경로}"       # 입력 파일 스캔
+python3 scripts/config_loader.py "{config}"                    # 설정 유효성
+python3 scripts/scan_inputs.py "{입력 경로}" --config "{config}"  # 입력 파일 스캔
 ```
 
 - config가 없으면 import를 진행하지 말고 `/pastor-sermon-setup`을 먼저 안내한다.
-- 지원 형식: `.docx`(pandoc 또는 python-docx 필요) / `.md` / `.txt`. 미지원 파일은 건너뛰고 보고에 기록한다.
+- 지원 형식: `.docx` / `.hwp` / `.hwpx` / `.pdf` / `.md` / `.txt`.
+  `ask_install`이 있으면 승인받아 `python3 scripts/ensure_tools.py --install {형식}`을 먼저 돌린다.
+- `skipped`의 이유(`.gdoc` 링크 파일, `~$` 잠금 파일, 0바이트 파일, 미지원 형식)를 그대로 보고한다.
+- `ask_undeclared`가 있으면 그 형식도 함께 가져올지 여쭙고 `input.file_types`를 늘린다.
 
 ### Step 2. 텍스트 추출 (파일별)
 
@@ -67,6 +78,8 @@ python3 scripts/extract_text.py "{파일 경로}"
 ```
 
 JSON의 `text`가 분석 대상 본문이다. 원본 파일은 읽기 전용이다.
+`warnings`가 있으면 그대로 전한다 — `scanned_pdf`(글자 없는 스캔 이미지)와
+`short_text`(본문 200자 미만)는 그냥 넘기면 빈 설교 노트가 된다는 신호다.
 
 ### Step 3. Claude 분석 ① — 설교 조각 분해
 
@@ -130,7 +143,8 @@ python3 scripts/build_notes.py "{입력 경로}" \
 ```
 
 - 스크립트가 허용 목록 밖 doctrine/WORD 값을 자동으로 걸러내고 경고에 남긴다.
-- 목사님께 보여줄 것: 생성될 파일 목록(경로), 충돌(`conflicts`), **병합 대상(`merges`)**, 건너뜀(`skips`), 경고(warnings), 조각 제목들, WORD 제안값.
+- 목사님께 보여줄 것: 생성될 파일 목록(경로), 구분별 편수(`by_sermon_kind`), 충돌(`conflicts`), **병합 대상(`merges`)**, 건너뜀(`skips`), 경고(warnings), 조각 제목들, WORD 제안값.
+- 구분을 알 수 없는 설교가 있으면 경고에 남는다. 기본 폴더로 들어간다는 사실을 알리고 진행 여부를 묻는다.
 - 경고에 "허용 목록 밖 값 제외"가 있으면 Step 3~4의 JSON을 수정해 다시 dry-run한다.
 - 충돌이 있으면 해당 노트는 만들지 않는다는 사실을 알리고, 진행 여부를 묻는다.
 - `merges`가 있으면 **파일 목록과 추가될 글머리 수를 보여주고 따로 승인받는다.** 병합은 기존 노트를 바꾸는 유일한 동작이다. 다만 frontmatter(분류·날짜)는 건드리지 않고 새 글머리만 끝에 붙으며, 중복 글머리는 추가되지 않는다.
@@ -155,7 +169,8 @@ python3 scripts/build_notes.py "{입력 경로}" \
 python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
 ```
 
-검증 항목: 파일 존재, vault 경계, 금지 문자, 조각 wikilink 해결, WORD/doctrine 허용 목록, tags 띄어쓰기.
+검증 항목: 파일 존재, vault 경계(구분별 폴더 라우팅 포함), 금지 문자, 조각 wikilink 해결,
+WORD/doctrine 허용 목록, 설교 구분 속성이 선언된 값인지, tags 띄어쓰기.
 
 `status`가 `blocked`면 **보고 전에 반드시 수정**한다:
 - 깨진 wikilink → 메인 노트의 링크를 실제 조각 파일명으로 Edit
@@ -165,11 +180,12 @@ python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
 ### Step 8. 보고
 
 ```text
-처리 완료: {N}개
+처리 완료: {N}개  ({구분별 편수})
 메인 노트: {경로}
 설교 조각: 신규 {A}개 · 병합 {C}개(글머리 +{D}개) · 건너뜀 {B}개
 성경구절: {M}개 추출 · 확인 필요 {K}개
 분류: {WORD 요약, use_word일 때}
+읽지 못한 파일: {있으면 이유와 함께}
 경고: {있으면}
 로그: {manifest 경로}
 ```
@@ -197,10 +213,15 @@ python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
 - `scripts/paths.py` — config·작업파일 경로 확인 (`--ensure`로 폴더 생성). 모든 단계의 경로 출처
 - `scripts/config_loader.py` — config 계약 로드·검증 (없는 키는 기본값으로 자동 보충)
 - `scripts/setup_profile.py` — 터미널 대화형 설정 위저드 (보조)
-- `scripts/parse_word_source.py` — 목사님 분류 노트를 읽어 허용 목록 추출 (`--explain`으로 계약 확인)
+- `scripts/find_sources.py` — 컴퓨터에서 볼트·설교 원고 폴더 찾기 (클라우드 포함)
+- `scripts/suggest_folders.py` — 볼트를 읽어 저장 폴더·분류 정본·설교 템플릿 후보 제시
+- `scripts/find_word_template.py` — 옵시디언 템플릿 폴더 설정·900번대 세팅 폴더에서 분류 정본 찾기
+- `scripts/guess_naming.py` — 설교 구분·날짜·파일명 규칙 추론
+- `scripts/parse_word_source.py` — 목사님 분류 노트를 읽어 허용 목록 추출 (`--sermon-only`로 설교용 부분집합, `--explain`으로 계약 확인)
+- `scripts/ensure_tools.py` — 형식별 변환 도구 점검·격리 설치 (`--check` / `--install`)
 - `scripts/list_fragments.py` — 기존 조각 제목 목록 (조각 재활용·병합의 전제)
-- `scripts/scan_inputs.py` — 입력 파일/폴더 스캔
-- `scripts/extract_text.py` — `.docx`(pandoc→python-docx fallback)/`.md`/`.txt` 텍스트 추출
+- `scripts/scan_inputs.py` — 입력 파일/폴더 스캔 (형식별 집계·건너뛴 이유·도구 필요 여부)
+- `scripts/extract_text.py` — `.docx`(pandoc→python-docx) / `.pdf`(pdftotext→pypdf) / `.hwpx`(표준 라이브러리) / `.hwp`(pyhwp) / `.md` / `.txt` 텍스트 추출
 - `scripts/extract_bible_refs.py` — 성경구절 추출·정규화·wikilink 생성
 - `scripts/extract_meta.py` — 날짜·제목·본문·sermon_id 추출
 - `scripts/build_notes.py` — dry-run 계획 / `--write --approve WRITE`일 때만 실제 생성

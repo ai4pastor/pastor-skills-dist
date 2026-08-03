@@ -5,12 +5,27 @@
   },
   "input": {
     "sermon_sources": [],
-    "file_types": ["docx", "md", "txt"]
+    "file_types": [
+      "docx",
+      "md",
+      "txt",
+      "pdf",
+      "hwpx",
+      "hwp"
+    ]
   },
   "output": {
     "main_sermon_folder": "",
     "fragment_folder": "",
     "log_folder": ".vault-sermon-import/logs"
+  },
+  "sermon_kinds": {
+    "enabled": false,
+    "values": [],
+    "marker_to_kind": {},
+    "frontmatter_key": "설교구분",
+    "folder_by_kind": {},
+    "world_by_kind": {}
   },
   "naming": {
     "main_note_pattern": "{date}_{title}_{main_passage}.md",

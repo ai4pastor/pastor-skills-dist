@@ -10,6 +10,7 @@ Checks:
 - route is a scalar when classification.route_scalar is on
 - a sermon note carries exactly one world when classification.single_world is on
 - classification values keep their emoji prefix (classification.require_value_prefix)
+- the sermon-kind property is a declared value and matches the planned kind
 - tags contain no whitespace
 - configured Bible link style is respected
 - Bible links without a note are reported as warnings (bible.note_folder)
@@ -139,14 +140,36 @@ def check_tags(path: Path, fields: dict[str, dict], sink: list[str]) -> None:
             sink.append(f"태그에 띄어쓰기 '{tag}': {path}")
 
 
+def check_sermon_kind(path: Path, fields: dict[str, dict], config: dict, is_main: bool,
+                      expected: str, sink: list[str]) -> None:
+    """설교 구분 속성이 선언된 값인지, 계획한 값과 같은지.
+
+    선언 밖 값이 한 번 들어가면 목사님 볼트에 새 분류가 조용히 생긴다 — 분류값을
+    허용 목록으로 묶는 것과 같은 이유로 막는다.
+    """
+    kinds = config.get("sermon_kinds") or {}
+    key = str(kinds.get("frontmatter_key") or "").strip()
+    if not key or not is_main:
+        return
+    declared = {compare_key(str(v)) for v in (kinds.get("values") or []) if str(v).strip()}
+    for value in fields.get(key, {}).get("values", []):
+        if declared and compare_key(value) not in declared:
+            sink.append(f"{key} 값 '{value}' 이 sermon_kinds.values 에 없습니다: {path}")
+        if expected and compare_key(value) != compare_key(expected):
+            sink.append(f"{key} 값이 계획({expected})과 다릅니다 '{value}': {path}")
+
+
 def manifest_entries(manifest: dict) -> list[dict]:
     """검사 대상 파일 목록. files[] 가 있으면 그것으로 종류를 판정한다."""
     rows = manifest.get("files") or []
     if rows:
-        return [{"path": Path(r["path"]), "kind": r.get("kind"), "action": r.get("action", "create")}
+        return [{"path": Path(r["path"]), "kind": r.get("kind"), "action": r.get("action", "create"),
+                 "sermon_kind": r.get("sermon_kind", "")}
                 for r in rows if r.get("action") in {"create", "merge"}]
-    entries = [{"path": Path(p), "kind": None, "action": "create"} for p in manifest.get("written", [])]
-    entries += [{"path": Path(p), "kind": None, "action": "merge"} for p in manifest.get("merged", [])]
+    entries = [{"path": Path(p), "kind": None, "action": "create", "sermon_kind": ""}
+               for p in manifest.get("written", [])]
+    entries += [{"path": Path(p), "kind": None, "action": "merge", "sermon_kind": ""}
+                for p in manifest.get("merged", [])]
     return entries
 
 
@@ -213,6 +236,8 @@ def verify_manifest(manifest_path: Path, config_path: str | None = None) -> dict
             check_classification(entry["path"], fields, config, local)
             check_word_shape(entry["path"], fields, config, entry["kind"] == "main", local)
             check_tags(entry["path"], fields, local)
+            check_sermon_kind(entry["path"], fields, config, entry["kind"] == "main",
+                              str(entry.get("sermon_kind") or ""), local)
             sink.extend(prefix + msg for msg in local)
 
         note_folder = str(config["bible"].get("note_folder") or "").strip()

@@ -147,6 +147,92 @@ def parse(text: str, prefixes: dict[str, str], doctrine_heading: str | None = No
     }
 
 
+SERMON_WORDS = ("설교", "말씀", "주일", "예배", "기도회", "강해", "sermon", "목양", "사역")
+FRAGMENT_WORDS = ("조각", "영감", "메모", "묵상")
+DONE_WORDS = ("완료", "완성", "마침", "종료", "done")
+
+
+def has_word(value: str, words: tuple[str, ...]) -> bool:
+    low = value.lower()
+    return any(word.lower() in low for word in words)
+
+
+def sermon_subset(parsed: dict) -> dict:
+    """설교 임포트에 실제로 쓰이는 값만 골라낸다.
+
+    설교 한 편을 넣는 데 목사님 분류 체계 전부가 필요하지는 않다. World 는 설교·사역
+    성격의 값, Outcome 은 설교 값 하나, Route 는 '완료' 하나면 된다. Doctrine 만은
+    좁히지 않는다 — 신학 주제는 설교마다 달라 목사님 목록 전체가 후보다.
+    """
+    axes = parsed.get("axes", {})
+    world = axes.get("world", {}) or {}
+    world_values = list(world.get("values") or [])
+
+    picked: list[str] = []
+    why: list[str] = []
+    for group in world.get("groups") or []:
+        major = str(group.get("major") or "")
+        if has_word(major, SERMON_WORDS):
+            for value in group.get("values") or []:
+                if value not in picked:
+                    picked.append(value)
+            why.append(f"'{major}' 묶음 전체")
+    for value in world_values:
+        if has_word(value, SERMON_WORDS) and value not in picked:
+            picked.append(value)
+            why.append(f"'{value}' — 이름에 설교 관련 단어")
+
+    fragment_candidate = next((v for v in world_values if has_word(v, FRAGMENT_WORDS)), "")
+    sermon_world = [v for v in picked if v != fragment_candidate]
+
+    outcome_values = list((axes.get("outcome", {}) or {}).get("values") or [])
+    outcome_hits = [v for v in outcome_values if has_word(v, ("설교",))]
+
+    route_values = list((axes.get("route", {}) or {}).get("values") or [])
+    route_hits = [v for v in route_values if has_word(v, DONE_WORDS)]
+
+    doctrine_values = list((axes.get("doctrine", {}) or {}).get("values") or [])
+
+    asks: list[str] = []
+    subset: dict = {
+        "world": {
+            "values": sermon_world,
+            "why": why,
+            "fragment_candidate": fragment_candidate,
+            "all_count": len(world_values),
+        },
+        "outcome": {
+            "values": outcome_values,
+            "recommended": outcome_hits[0] if outcome_hits else "",
+        },
+        "route": {
+            "values": route_values,
+            "recommended": route_hits[0] if route_hits else "",
+            "scalar": True,
+        },
+        "doctrine": {
+            "count": len(doctrine_values),
+            "note": "신학 주제는 설교마다 달라 좁히지 않습니다 — 목사님 목록 전체를 후보로 둡니다.",
+        },
+    }
+
+    if not sermon_world:
+        asks.append(f"설교에 쓸 분류(World) 값을 찾지 못했습니다. 전체 {len(world_values)}개 중에서 "
+                    "설교에 붙이실 값을 골라 주세요.")
+    if not fragment_candidate:
+        asks.append("설교 조각에 붙일 값(조각·영감 성격)을 찾지 못했습니다. 하나 골라 주시거나 "
+                    "비워 두셔도 됩니다.")
+    if subset["route"]["recommended"]:
+        asks.append(f"설교는 이미 설교하신 완성 원고라, 진행 단계는 '{subset['route']['recommended']}' 로 "
+                    "넣겠습니다. 괜찮으신가요?")
+    elif route_values:
+        asks.append(f"진행 단계(Route) 중 어느 값을 쓸까요? ({' · '.join(route_values[:6])})")
+    if subset["outcome"]["recommended"]:
+        asks.append(f"활용 목적(Outcome)은 '{subset['outcome']['recommended']}' 로 넣겠습니다. 맞습니까?")
+    subset["ask"] = asks
+    return subset
+
+
 EXPLAIN = """스킬이 분류 노트에서 찾는 모양
 
     World 소분류   [[📩 201 청소년부 설교]]     (접두어 "📩 ")
@@ -170,6 +256,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--doctrine-heading", default=None,
                         help="Doctrine 섹션 제목의 일부 (기본: 접두어로 자동 판정)")
     parser.add_argument("--generic", action="store_true", help="접두어 없이 헤딩·목록만 수집")
+    parser.add_argument("--sermon-only", action="store_true",
+                        help="설교 임포트에 쓰이는 부분집합(설교 World·Outcome·Route 추천)을 함께 계산")
     parser.add_argument("--explain", action="store_true", help="파싱 계약을 출력")
     args = parser.parse_args(argv[1:])
 
@@ -198,6 +286,11 @@ def main(argv: list[str]) -> int:
     if not args.generic and len(result["missing_axes"]) == len(AXES):
         result = parse_generic(text)
         result["note"] = "접두어 매칭이 0건이라 일반 모드로 다시 읽었습니다. " + result.get("note", "")
+    if args.sermon_only:
+        if result.get("mode") == "generic":
+            result["sermon_subset"] = {"ask": ["묶음이 어느 축인지 먼저 확인해야 설교용 값을 고를 수 있습니다."]}
+        else:
+            result["sermon_subset"] = sermon_subset(result)
     result["source_note"] = path.name
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

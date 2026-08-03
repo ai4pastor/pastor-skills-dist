@@ -41,6 +41,40 @@ def nfc(value: str) -> str:
     return unicodedata.normalize("NFC", value or "")
 
 
+# 설교가 아닌데 설교 파일처럼 보이는 것들.
+GOOGLE_STUB_SUFFIXES = {".gdoc", ".gsheet", ".gslides", ".gdraw", ".gform"}
+
+
+def sidecar_reason(path: Path) -> str:
+    """설교로 다루면 안 되는 파일이면 그 이유를, 아니면 빈 문자열.
+
+    워드는 문서를 열어 둔 동안 "~$설교.docx" 를 남기고, macOS 는 "._이름" 리소스
+    포크를 떨어뜨린다. 구글 드라이브의 ".gdoc" 은 실제 문서가 아니라 링크 한 줄이고,
+    클라우드 동기화 폴더에는 아직 내려오지 않은 0바이트 자리표시자가 있다.
+    넷 다 그냥 두면 빈 설교 노트가 된다.
+    """
+    name = path.name
+    if name.startswith("~$"):
+        return "lock_file"
+    if name.startswith("._"):
+        return "mac_metadata"
+    if name.startswith("."):
+        return "hidden"
+    if path.suffix.lower() in GOOGLE_STUB_SUFFIXES:
+        return "google_stub"
+    try:
+        if path.is_file() and path.stat().st_size == 0:
+            return "empty_or_cloud_placeholder"
+    except OSError:
+        return "unreadable"
+    return ""
+
+
+def is_sidecar(path: Path) -> bool:
+    """Word lock files, macOS metadata, and cloud stubs are not sermons."""
+    return bool(sidecar_reason(path))
+
+
 def strip_vs(value: str) -> str:
     """Drop the emoji variation selector so 🏷️ and 🏷 compare equal."""
     return (value or "").replace(VARIATION_SELECTOR, "")

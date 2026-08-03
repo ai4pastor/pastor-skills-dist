@@ -1,0 +1,19 @@
+{
+  "comment": "verify_claims.py의 기관 도메인 결정론 판정에 사용. suffixes는 끝일치, domains는 도메인 일치.",
+  "suffixes": [".edu", ".gov", ".museum", ".ac.kr", ".ac.uk", ".ac.il", ".ac.jp", ".go.kr", ".gov.il", ".gov.uk"],
+  "domains": [
+    "britishmuseum.org",
+    "louvre.fr",
+    "imj.org.il",
+    "penn.museum",
+    "metmuseum.org",
+    "jstor.org",
+    "sbl-site.org",
+    "biblicalarchaeology.org",
+    "deadseascrolls.org.il",
+    "vatican.va",
+    "csntm.org",
+    "tyndalehouse.com"
+  ],
+  "wiki_domains": ["wikipedia.org", "wikimedia.org", "namu.wiki"]
+}

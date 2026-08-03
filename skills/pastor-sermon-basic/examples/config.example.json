@@ -1,0 +1,54 @@
+{
+  "version": 2,
+  "vault": {
+    "path": ""
+  },
+  "input": {
+    "sermon_sources": [],
+    "file_types": ["docx", "md", "txt"]
+  },
+  "output": {
+    "main_sermon_folder": "",
+    "fragment_folder": "",
+    "log_folder": ".vault-sermon-import/logs"
+  },
+  "naming": {
+    "main_note_pattern": "{date}_{title}_{main_passage}.md",
+    "fragment_note_pattern": "{sermon_id}_{title}.md",
+    "date_from_filename": true,
+    "target_from_folder": true,
+    "collision_policy": "ask",
+    "fragment_collision_policy": "skip",
+    "target_markers": [],
+    "folder_to_target": {},
+    "folder_number_prefix_strip": true
+  },
+  "classification": {
+    "use_word": false,
+    "world_values": [],
+    "outcome_values": [],
+    "route_values": [],
+    "doctrine_values": [],
+    "allow_unknown_doctrine": false,
+    "route_scalar": false,
+    "single_world": false,
+    "require_value_prefix": {},
+    "wrap_values_in_wikilink": false,
+    "fragment_world": "",
+    "preset": ""
+  },
+  "bible": {
+    "link_style": "[[{normalized}]]",
+    "range_policy": "expand_each_verse",
+    "max_range_expand": 50,
+    "note_folder": "",
+    "book_aliases": {},
+    "frontmatter_key": "성경구절"
+  },
+  "safety": {
+    "dry_run_first": true,
+    "overwrite_existing": false,
+    "require_approval_before_write": true,
+    "preserve_original_files": true
+  }
+}

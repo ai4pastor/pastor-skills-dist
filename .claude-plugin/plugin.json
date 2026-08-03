@@ -1,0 +1,26 @@
+{
+  "name": "pastor-skills",
+  "version": "1.1.0",
+  "description": "목회자용 Claude Code 스킬 묶음 — 설교 정리(입문·세밀 두 경로)와 설교 연구실. 개인 설정은 스킬 폴더 밖(~/.pastor-sermon-import/config.json)에 저장되므로 플러그인을 업데이트해도 그대로 유지된다.",
+  "author": {
+    "name": "AI4Pastor",
+    "url": "https://github.com/ai4pastor"
+  },
+  "repository": "https://github.com/ai4pastor/pastor-skills-dist",
+  "license": "MIT",
+  "keywords": [
+    "obsidian",
+    "sermon",
+    "pastor",
+    "korean",
+    "pkm",
+    "bible",
+    "sermon-import",
+    "claude-code"
+  ],
+  "skills": [
+    "./skills/pastor-sermon-basic",
+    "./skills/pastor-sermon-import",
+    "./skills/pastor-sermon-lab"
+  ]
+}

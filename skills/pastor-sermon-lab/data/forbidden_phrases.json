@@ -1,0 +1,12 @@
+{
+  "comment": "verify_note.py가 본문에서 정규식으로 검출한다. 발견 시 게이트 실패.",
+  "patterns": [
+    { "pattern": "만장일치", "reason": "학계 만장일치 단정 금지 — ⚠️ 또는 🟡로 완화" },
+    { "pattern": "모든 학자(가|들이|는)", "reason": "전칭 단정 금지" },
+    { "pattern": "고고학(이|적으로)\\s*(증명|입증)", "reason": "고고학은 증명이 아니라 지지·부합의 언어를 쓴다" },
+    { "pattern": "의심의 여지가 없", "reason": "단정 표현 금지" },
+    { "pattern": "100\\s*%\\s*(확실|정확)", "reason": "단정 표현 금지" },
+    { "pattern": "\\[(CONFIRMED|PROBABLE|UNCERTAIN|DEBATED|FORGERY)", "reason": "등급 표기는 이모지 단일 체계만 사용" },
+    { "pattern": "증거\\s*부재는?\\s*(사건|사실)\\s*부재", "reason": "고고학적 침묵은 부재 증명이 아니다 — 서술 자체를 다듬을 것" }
+  ]
+}

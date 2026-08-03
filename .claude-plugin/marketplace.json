@@ -14,7 +14,7 @@
       "source": "./",
       "strict": false,
       "version": "1.2.0",
-      "description": "설교 파일(.docx/.md/.txt)을 Obsidian 메인 노트 + 설교 조각 노트로 정리한다. 폴더 위치만 답하면 되는 입문 경로(pastor-sermon-basic)와 형식·병합·검증을 직접 정하는 경로(pastor-sermon-import), 그리고 본문 연구·설교 진단·자료 보강(pastor-sermon-lab). 원본은 수정하지 않고, 기존 노트를 덮어쓰지 않으며, 미리보기 승인 뒤에만 파일을 만든다.",
+      "description": "설교 파일(.docx/.hwp/.hwpx/.pdf/.md/.txt)을 Obsidian 메인 노트 + 설교 조각 노트로 정리한다. 원고가 구글 드라이브·원드라이브에 있어도 찾아서 가져오고, 설교 구분(대예배·수요기도회·새벽기도회)을 여쭤보고 나눈다. 폴더 위치만 답하면 되는 입문 경로(pastor-sermon-basic)와 형식·병합·검증을 직접 정하는 경로(pastor-sermon-import), 그리고 본문 연구·설교 진단·자료 보강(pastor-sermon-lab). 원본은 수정하지 않고, 기존 노트를 덮어쓰지 않으며, 미리보기 승인 뒤에만 파일을 만든다.",
       "author": {
         "name": "AI4Pastor",
         "url": "https://github.com/ai4pastor"

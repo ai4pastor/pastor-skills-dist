@@ -31,6 +31,7 @@
 - LLM 분석이 없으면 결정론 분해로 fallback
 - 추출 결과는 내용 해시로 캐시 (`<설정 홈>/work/extracted`) — dry-run·write가 같은 변환을 반복하지 않음
 - 대량 import는 5편 청크로 분석하고 `--resume`으로 이어하기, 충돌 노트는 승인 후 `--skip-conflicts`로 건너뛰기
+- 조각 문체·구성은 `<설정 홈>/custom_rules.md`(나만의 규칙)로 개인화 — 스킬 파일을 고치지 않아 업데이트에도 유지
 
 ## 테스트
 

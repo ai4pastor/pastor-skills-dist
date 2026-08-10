@@ -26,10 +26,13 @@ def resolve(vault_path: str | None = None) -> dict[str, object]:
     base = home()
     work = work_dir()
     cfg = config_path(vault_path)
+    custom = base / "custom_rules.md"
     return {
         "home": str(base),
         "config": str(cfg),
         "config_exists": cfg.exists(),
+        "custom_rules": str(custom),
+        "custom_rules_exists": custom.exists(),
         "work": str(work),
         "fragments": str(work / "fragments.json"),
         "word": str(work / "word.json"),

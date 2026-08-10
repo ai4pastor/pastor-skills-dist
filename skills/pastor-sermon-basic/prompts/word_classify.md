@@ -3,6 +3,10 @@
 설교 전체를 목사님 개인 분류 체계(WORD: World·Outcome·Route·Doctrine)에 따라 분류를 **제안**한다.
 확정은 dry-run 미리보기에서 목사님 승인으로 이루어진다.
 
+이 분류는 조각 분해(`prompts/split_fragments.md`)와 **같은 한 번의 분석에서 함께**
+수행한다 — 본문을 두 번 읽지 않는다. 조각을 모두 나눈 직후, 각 조각의 doctrine을
+알고 있는 상태에서 설교 전체의 분류를 고르면 된다. 출력은 지금처럼 별도 파일이다.
+
 ## 절대 원칙
 
 - 모든 값은 config `classification`의 허용 목록(`world_values`/`outcome_values`/`route_values`/`doctrine_values`) **안에서만** 고른다.

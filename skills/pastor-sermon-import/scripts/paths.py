@@ -33,6 +33,9 @@ def resolve(vault_path: str | None = None) -> dict[str, object]:
         "work": str(work),
         "fragments": str(work / "fragments.json"),
         "word": str(work / "word.json"),
+        "fragments_dir": str(work / "fragments"),
+        "word_dir": str(work / "word"),
+        "extract_cache": str(work / "extracted"),
         "env_var": HOME_ENV_VAR,
         "overridden": bool(os.environ.get(HOME_ENV_VAR)),
     }
@@ -55,8 +58,8 @@ def main(argv: list[str]) -> int:
 
     info = resolve(vault)
     if ensure:
-        Path(str(info["home"])).mkdir(parents=True, exist_ok=True)
-        Path(str(info["work"])).mkdir(parents=True, exist_ok=True)
+        for key in ("home", "work", "fragments_dir", "word_dir", "extract_cache"):
+            Path(str(info[key])).mkdir(parents=True, exist_ok=True)
         info["ensured"] = True
 
     print(json.dumps(info, ensure_ascii=False, indent=2))

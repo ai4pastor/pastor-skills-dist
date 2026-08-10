@@ -214,7 +214,11 @@ def verify_manifest(manifest_path: Path, config_path: str | None = None) -> dict
 
     for main in main_files:
         text = main.read_text(encoding="utf-8")
-        for match in WIKILINK_RE.finditer(text):
+        # "# 원본 설교문" 이후는 목사님 원고를 그대로 보존한 영역이다. 원고에
+        # 원래 있던 [[링크]]는 import가 만든 것이 아니므로 검사하지 않는다 —
+        # 여기서 이슈를 내면 모델이 원본 본문을 "고치려" 들게 된다 (원본 보존 위반).
+        generated = text.split(MAIN_NOTE_MARKER, 1)[0]
+        for match in WIKILINK_RE.finditer(generated):
             name = match.group("name")
             if name in fragment_stems or name in all_stems:
                 continue

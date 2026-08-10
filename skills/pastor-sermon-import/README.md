@@ -29,6 +29,8 @@
 - 변환 도구는 시스템에 설치하지 않고 `<설정 홈>/tools/pylibs` 에 격리 설치 (승인 후)
 - 조각 분해·분류는 Claude(LLM)가 수행하고, 파일 생성·검증은 스크립트가 결정론적으로 수행
 - LLM 분석이 없으면 결정론 분해로 fallback
+- 추출 결과는 내용 해시로 캐시 (`<설정 홈>/work/extracted`) — dry-run·write가 같은 변환을 반복하지 않음
+- 대량 import는 5편 청크로 분석하고 `--resume`으로 이어하기, 충돌 노트는 승인 후 `--skip-conflicts`로 건너뛰기
 
 ## 테스트
 
@@ -54,4 +56,3 @@ python3 tools/build_release.py pastor-sermon-import --version v1.0
 
 1. 스캔 PDF OCR (현재는 `scanned_pdf` 경고로 알리고 다른 원본을 안내)
 2. 구버전 `.doc`·Pages 입력 지원 (LibreOffice 의존이 커서 보류)
-3. 대량 import resume·중복 설교 감지

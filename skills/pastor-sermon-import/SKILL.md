@@ -55,8 +55,10 @@ description: 목회자의 기존 설교 파일(.docx/.hwp/.hwpx/.pdf/.md/.txt)�
 python3 scripts/paths.py --ensure
 ```
 
-출력의 `config`·`fragments`·`word`를 이후 단계에서 각각 `{config}`·`{fragments}`·`{word}`로 쓴다.
+출력의 `config`·`fragments_dir`·`word_dir`를 이후 단계에서 각각 `{config}`·`{fragments_dir}`·`{word_dir}`로 쓴다.
 **경로를 직접 타이핑하지 않는다** — 목사님 환경에 따라 저장 위치가 달라진다.
+`{fragments_dir}`·`{word_dir}`에 이전 실행의 청크 파일이 남아 있으면 새 import 를 시작하기 전에 비운다
+(이어서 하는 재실행이면 그대로 둔다 — 이미 분석한 묶음을 다시 분석하지 않아도 된다).
 
 ### Step 1. 준비 확인
 
@@ -71,30 +73,45 @@ python3 scripts/scan_inputs.py "{입력 경로}" --config "{config}"  # 입력 �
 - `skipped`의 이유(`.gdoc` 링크 파일, `~$` 잠금 파일, 0바이트 파일, 미지원 형식)를 그대로 보고한다.
 - `ask_undeclared`가 있으면 그 형식도 함께 가져올지 여쭙고 `input.file_types`를 늘린다.
 
-### Step 2. 텍스트 추출 (파일별)
+### Step 2. 추출 + 분석 (5편씩 묶어서)
+
+입력 파일을 **5편 안팎의 묶음(청크)으로 나눠** 묶음마다 아래 ①~④를 처리한다.
+한 묶음이 끝나면 결과가 파일로 저장돼 있으므로 그 원고들은 잊고 다음 묶음으로
+넘어간다 — 원고 수십 편을 동시에 기억하려 하면 대량 import 가 느려진다.
+이 단계에서 목사님께 질문할 일은 없다. 묶음이 끝날 때마다 진행 상황만 한 줄로
+알린다: `10/50편 정리 중…`
+
+**① 추출** — 묶음의 파일별로:
 
 ```bash
 python3 scripts/extract_text.py "{파일 경로}"
 ```
 
-JSON의 `text`가 분석 대상 본문이다. 원본 파일은 읽기 전용이다.
+JSON의 `text`가 분석 대상 본문이다. 원본 파일은 읽기 전용이다. 추출 결과는
+캐시되므로 이후 dry-run·실제 쓰기가 같은 변환을 반복하지 않는다.
 `warnings`가 있으면 그대로 전한다 — `scanned_pdf`(글자 없는 스캔 이미지)와
 `short_text`(본문 200자 미만)는 그냥 넘기면 빈 설교 노트가 된다는 신호다.
 
-### Step 3. Claude 분석 ① — 설교 조각 분해
+**② 분석 (설교마다 한 번에)** — 본문을 **한 번만** 읽고 두 가지를 함께 만든다:
 
-먼저 목사님 볼트에 이미 있는 조각 제목을 확인한다:
+- `prompts/split_fragments.md` 규칙 그대로 의미 단위 조각 분해
+- `use_word: true`면 `prompts/word_classify.md` 규칙 그대로 설교 전체 WORD/분류 제안
+  (조각을 다 나눈 직후가 설교 전체 주제를 가장 정확히 아는 순간이다)
+
+**③ 제목 대조** — 묶음의 조각 제목 초안들을 `{"titles": [...]}` JSON으로 모아
+근접 후보만 받는다:
 
 ```bash
-python3 scripts/list_fragments.py --config "{config}"
+python3 scripts/list_fragments.py --config "{config}" --match-file "{초안 JSON}" --extra "{fragments_dir}"
 ```
 
-이 목록에 **의미가 같은 제목이 있으면 새로 짓지 말고 그 제목을 글자 그대로 쓴다.**
-가운뎃점·공백·어순이 한 글자만 달라도 다른 파일이 되어 같은 생각이 두 벌로 갈라진다.
-출력에 `truncated: true`가 있으면 목록이 잘렸다는 사실을 최종 보고에 남긴다.
+초안마다 돌아온 후보 중 **의미가 같은 제목이 있으면 새로 짓지 말고 그 제목을
+글자 그대로 쓴다.** 가운뎃점·공백·어순이 한 글자만 달라도 다른 파일이 되어 같은
+생각이 두 벌로 갈라진다. `--extra` 덕분에 앞 묶음이 지은 제목과도 대조된다.
 
-`prompts/split_fragments.md`의 규칙을 그대로 따라 본문을 의미 단위 조각으로 분해한다.
-결과를 **작업 파일** `{fragments}` (Step 0의 출력값)에 저장한다:
+**④ 저장** — 묶음 결과를 청크 파일 두 개로 저장한다 (묶음 번호대로 01, 02, …):
+
+`{fragments_dir}/chunk-01.json`:
 
 ```json
 {
@@ -112,12 +129,8 @@ python3 scripts/list_fragments.py --config "{config}"
 
 - `doctrine`은 config의 `classification.doctrine_values` **안에서만**, 그 조각 내용 기준으로 1~3개.
 - `use_word: false`면 `doctrine`을 생략한다. `tags`는 항상 넣는다.
-- 여러 파일 일괄 처리 시 한 JSON에 파일별 항목을 모두 넣는다.
 
-### Step 4. Claude 분석 ② — WORD/분류 제안 (use_word: true일 때만)
-
-`prompts/word_classify.md`의 규칙을 그대로 따라 설교 전체의 분류를 제안한다.
-결과를 `{word}` (Step 0의 출력값)에 저장한다:
+`{word_dir}/chunk-01.json` (`use_word: false`면 만들지 않는다):
 
 ```json
 {
@@ -131,39 +144,49 @@ python3 scripts/list_fragments.py --config "{config}"
 }
 ```
 
-`use_word: false`면 이 단계를 건너뛴다.
-
-### Step 5. dry-run 미리보기
+### Step 3. dry-run 미리보기
 
 ```bash
 python3 scripts/build_notes.py "{입력 경로}" \
   --config "{config}" \
-  --fragments "{fragments}" \
-  --word "{word}"
+  --fragments "{fragments_dir}" \
+  --word "{word_dir}" \
+  --resume
 ```
 
+추출은 Step 2의 캐시를 재사용하므로 여기서 파일을 다시 변환하지 않는다.
+`--resume`은 이전 실행의 manifest에 기록된 원고를 자동으로 건너뛴다 — 대량
+import 가 중간에 끊겨도 처음부터 다시 하지 않는다.
+
 - 스크립트가 허용 목록 밖 doctrine/WORD 값을 자동으로 걸러내고 경고에 남긴다.
-- 목사님께 보여줄 것: 생성될 파일 목록(경로), 구분별 편수(`by_sermon_kind`), 충돌(`conflicts`), **병합 대상(`merges`)**, 건너뜀(`skips`), 경고(warnings), 조각 제목들, WORD 제안값.
+- 목사님께 보여줄 것: 생성될 파일 목록(경로), 구분별 편수(`by_sermon_kind`), 충돌(`conflicts`), **병합 대상(`merges`)**, 건너뜀(`skips`), 재개로 건너뜀(`resumed`), 경고(warnings), 조각 제목들, WORD 제안값.
 - 구분을 알 수 없는 설교가 있으면 경고에 남는다. 기본 폴더로 들어간다는 사실을 알리고 진행 여부를 묻는다.
-- 경고에 "허용 목록 밖 값 제외"가 있으면 Step 3~4의 JSON을 수정해 다시 dry-run한다.
-- 충돌이 있으면 해당 노트는 만들지 않는다는 사실을 알리고, 진행 여부를 묻는다.
+- "허용 목록 밖 값 제외" 경고는 **재실행이 필요 없다** — 스크립트가 이미 안전하게
+  걸러냈다. 다만 그 때문에 world/outcome/route가 통째로 빈 파일이 있으면, 그 파일이
+  든 청크 JSON만 허용 목록 안의 값으로 고쳐 dry-run을 다시 돌린다 (캐시 덕에 몇 초면 끝난다).
+- 충돌이 있으면 해당 설교는 만들지 않는다는 사실을 알리고, **충돌만 건너뛰고
+  나머지를 진행할지** 여쭙는다. 승인하시면 Step 4에서 `--skip-conflicts`를 붙인다.
 - `merges`가 있으면 **파일 목록과 추가될 글머리 수를 보여주고 따로 승인받는다.** 병합은 기존 노트를 바꾸는 유일한 동작이다. 다만 frontmatter(분류·날짜)는 건드리지 않고 새 글머리만 끝에 붙으며, 중복 글머리는 추가되지 않는다.
 
-### Step 6. 승인 후 실제 쓰기
+### Step 4. 승인 후 실제 쓰기
 
 목사님이 명시적으로 승인한 경우에만:
 
 ```bash
 python3 scripts/build_notes.py "{입력 경로}" \
   --config "{config}" \
-  --fragments "{fragments}" \
-  --word "{word}" \
+  --fragments "{fragments_dir}" \
+  --word "{word_dir}" \
+  --resume \
   --write --approve WRITE
 ```
 
+충돌 건너뛰기를 승인받았다면 `--skip-conflicts`를 붙인다 — 충돌 설교만 manifest에
+`skip_conflict`로 남고 나머지가 정상 생성된다. 승인 없이는 붙이지 않는다.
+
 출력의 `manifest` 경로를 기억한다.
 
-### Step 7. 검증 (필수)
+### Step 5. 검증 (필수)
 
 ```bash
 python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
@@ -177,12 +200,14 @@ WORD/doctrine 허용 목록, 설교 구분 속성이 선언된 값인지, tags �
 - 허용 목록 밖 값 → frontmatter를 허용 값으로 Edit
 - 수정 후 verify 재실행 → `ok` 확인
 
-### Step 8. 보고
+### Step 6. 보고
 
 ```text
 처리 완료: {N}개  ({구분별 편수})
 메인 노트: {경로}
 설교 조각: 신규 {A}개 · 병합 {C}개(글머리 +{D}개) · 건너뜀 {B}개
+충돌로 건너뜀: {있으면 편수와 노트 이름}
+이미 정리돼 건너뜀(재개): {resumed 있으면 편수}
 성경구절: {M}개 추출 · 확인 필요 {K}개
 분류: {WORD 요약, use_word일 때}
 읽지 못한 파일: {있으면 이유와 함께}
@@ -219,10 +244,10 @@ WORD/doctrine 허용 목록, 설교 구분 속성이 선언된 값인지, tags �
 - `scripts/guess_naming.py` — 설교 구분·날짜·파일명 규칙 추론
 - `scripts/parse_word_source.py` — 목사님 분류 노트를 읽어 허용 목록 추출 (`--sermon-only`로 설교용 부분집합, `--explain`으로 계약 확인)
 - `scripts/ensure_tools.py` — 형식별 변환 도구 점검·격리 설치 (`--check` / `--install`)
-- `scripts/list_fragments.py` — 기존 조각 제목 목록 (조각 재활용·병합의 전제)
+- `scripts/list_fragments.py` — 기존 조각 제목 목록 / `--match-file`로 제목 초안별 근접 후보만 반환 (조각 재활용·병합의 전제)
 - `scripts/scan_inputs.py` — 입력 파일/폴더 스캔 (형식별 집계·건너뛴 이유·도구 필요 여부)
-- `scripts/extract_text.py` — `.docx`(pandoc→python-docx) / `.pdf`(pdftotext→pypdf) / `.hwpx`(표준 라이브러리) / `.hwp`(pyhwp) / `.md` / `.txt` 텍스트 추출
+- `scripts/extract_text.py` — `.docx`(pandoc→python-docx) / `.pdf`(pdftotext→pypdf) / `.hwpx`(표준 라이브러리) / `.hwp`(pyhwp) / `.md` / `.txt` 텍스트 추출 (내용 해시 캐시 — 같은 원고를 다시 변환하지 않음)
 - `scripts/extract_bible_refs.py` — 성경구절 추출·정규화·wikilink 생성
 - `scripts/extract_meta.py` — 날짜·제목·본문·sermon_id 추출
-- `scripts/build_notes.py` — dry-run 계획 / `--write --approve WRITE`일 때만 실제 생성
+- `scripts/build_notes.py` — dry-run 계획 / `--write --approve WRITE`일 때만 실제 생성. 청크 폴더 입력·`--resume`(이미 편입한 원고 건너뛰기)·`--skip-conflicts`(승인 후 충돌만 건너뛰기) 지원
 - `scripts/verify_output.py` — manifest 기반 출력 검증

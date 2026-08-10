@@ -36,8 +36,10 @@ description: 설교 파일(.docx/.hwp/.hwpx/.pdf/.md/.txt)을 Obsidian에 정리
 python3 scripts/paths.py --ensure
 ```
 
-출력의 `config`·`fragments`·`word`를 이후 `{config}`·`{fragments}`·`{word}`로 쓴다.
+출력의 `config`·`fragments_dir`·`word_dir`를 이후 `{config}`·`{fragments_dir}`·`{word_dir}`로 쓴다.
 `config_exists`가 `false`면 **A. 첫 설정**부터, `true`면 **B. 정리**부터 진행한다.
+`{fragments_dir}`·`{word_dir}`에 이전 실행의 청크 파일이 남아 있으면 새 정리를 시작하기 전에 비운다
+(끊긴 정리를 이어서 하는 경우면 그대로 둔다).
 
 ---
 
@@ -170,28 +172,44 @@ python3 scripts/scan_inputs.py "{입력 경로}" --config "{config}"
 `ask_install` 이 있으면 승인받아 `ensure_tools.py --install` 을 먼저 돌린다.
 건너뛴 파일은 이유와 함께 보고에 남긴다.
 
-### B-2. 텍스트 추출 (파일별)
+### B-2. 추출 + 분석 (5편씩 묶어서)
+
+설교를 **5편 안팎의 묶음으로 나눠** 묶음마다 ①~④를 처리한다. 한 묶음이 끝나면
+결과가 파일로 저장돼 있으니 그 원고들은 잊고 다음 묶음으로 — 수십 편을 동시에
+기억하려 하면 정리가 느려진다. 이 단계에서 목사님께 질문할 일은 없다.
+묶음이 끝날 때마다 `10/50편 정리 중…` 한 줄만 알린다.
+
+**① 추출** — 묶음의 파일별로:
 
 ```bash
 python3 scripts/extract_text.py "{파일 경로}"
 ```
 
-JSON의 `text`가 분석 대상 본문이다. 원본 파일은 읽기 전용이다.
+JSON의 `text`가 분석 대상 본문이다. 원본 파일은 읽기 전용이다. 추출 결과는
+캐시되므로 뒤의 미리보기·쓰기가 같은 변환을 반복하지 않는다.
 `warnings` 가 있으면 목사님께 그대로 전한다 — `scanned_pdf`(글자 없는 스캔 이미지)와
 `short_text`(본문이 200자 미만)는 그 설교를 그냥 넘기면 빈 노트가 된다는 신호다.
 
-### B-3. 조각 분해
+**② 분석 (설교마다 한 번에)** — 본문을 **한 번만** 읽고 두 가지를 함께 만든다:
 
-먼저 이미 있는 조각 제목을 확인한다:
+- `prompts/split_fragments.md` 규칙 그대로 조각 분해.
+  예화는 `kind: illustration` + 제목을 `💡 {비유명} - {핵심 메시지}` 형식으로.
+- 분류를 쓰면 `prompts/word_classify.md` 규칙 그대로 설교 전체 분류 제안.
+
+**③ 제목 대조** — 묶음의 조각 제목 초안들을 `{"titles": [...]}` JSON으로 모아
+비슷한 기존 제목만 받아 본다:
 
 ```bash
-python3 scripts/list_fragments.py --config "{config}"
+python3 scripts/list_fragments.py --config "{config}" --match-file "{초안 JSON}" --extra "{fragments_dir}"
 ```
 
-목록에 **의미가 같은 제목이 있으면 그 제목을 글자 그대로 쓴다.** 한 글자만 달라도
-다른 파일이 되어 같은 생각이 두 벌로 갈라진다.
+돌아온 후보 중 **의미가 같은 제목이 있으면 그 제목을 글자 그대로 쓴다.** 한 글자만
+달라도 다른 파일이 되어 같은 생각이 두 벌로 갈라진다. `--extra` 덕에 앞 묶음이
+지은 제목과도 대조된다.
 
-그다음 `prompts/split_fragments.md`의 규칙을 그대로 따라 분해하고 `{fragments}`에 저장한다:
+**④ 저장** — 묶음 결과를 청크 파일로 저장한다 (묶음 번호대로 01, 02, …):
+
+`{fragments_dir}/chunk-01.json`:
 
 ```json
 {
@@ -207,12 +225,9 @@ python3 scripts/list_fragments.py --config "{config}"
 }
 ```
 
-- 예화는 `kind: illustration` + 제목을 `💡 {비유명} - {핵심 메시지}` 형식으로.
 - `doctrine`은 허용 목록 안에서 그 조각 내용 기준 1~3개. 분류를 안 쓰면 생략.
 
-### B-4. 분류 제안 (분류를 쓸 때만)
-
-`prompts/word_classify.md`를 따라 설교 전체 분류를 제안하고 `{word}`에 저장한다.
+분류를 쓰면 `{word_dir}/chunk-01.json`도 저장한다:
 
 ```json
 {
@@ -226,31 +241,43 @@ python3 scripts/list_fragments.py --config "{config}"
 }
 ```
 
-### B-5. 미리보기 (dry-run)
+### B-3. 미리보기 (dry-run)
 
 ```bash
 python3 scripts/build_notes.py "{입력 경로}" \
-  --config "{config}" --fragments "{fragments}" --word "{word}"
+  --config "{config}" --fragments "{fragments_dir}" --word "{word_dir}" --resume
 ```
 
+추출은 B-2의 캐시를 재사용하므로 파일을 다시 변환하지 않는다. `--resume`은 이전
+실행에서 이미 정리한 원고를 자동으로 건너뛴다 — 정리가 중간에 끊겨도 처음부터
+다시 하지 않는다.
+
 목사님께 보여줄 것: 만들어질 파일 목록, 조각 제목들, 구분별 편수(`by_sermon_kind`),
-충돌(`conflicts`), 건너뜀(`skips`), 경고(`warnings`), 분류 제안값.
+충돌(`conflicts`), 건너뜀(`skips`), 재개로 건너뜀(`resumed`), 경고(`warnings`), 분류 제안값.
 
-경고에 "허용 목록 밖 값 제외"가 있으면 B-3~B-4의 JSON을 고쳐 다시 미리보기한다.
+"허용 목록 밖 값 제외" 경고는 다시 돌릴 필요 없다 — 스크립트가 이미 안전하게
+걸러냈다. 그 때문에 분류 축이 통째로 빈 설교가 있을 때만 그 설교가 든 청크 JSON을
+고쳐 미리보기를 다시 돌린다 (캐시 덕에 몇 초면 끝난다).
 
-### B-6. 승인 후 쓰기
+충돌이 있으면 그 설교는 만들지 않는다는 사실을 알리고, **충돌만 건너뛰고 나머지를
+진행할지** 여쭙는다. 승인하시면 B-4에서 `--skip-conflicts`를 붙인다.
+
+### B-4. 승인 후 쓰기
 
 목사님이 명시적으로 승인한 경우에만:
 
 ```bash
 python3 scripts/build_notes.py "{입력 경로}" \
-  --config "{config}" --fragments "{fragments}" --word "{word}" \
+  --config "{config}" --fragments "{fragments_dir}" --word "{word_dir}" \
+  --resume \
   --write --approve WRITE
 ```
 
+충돌 건너뛰기를 승인받았다면 `--skip-conflicts`를 붙인다. 승인 없이는 붙이지 않는다.
+
 출력의 `manifest` 경로를 기억한다.
 
-### B-7. 검증 (필수)
+### B-5. 검증 (필수)
 
 ```bash
 python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
@@ -259,12 +286,14 @@ python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
 `status`가 `blocked`면 **보고 전에 반드시 고친다** — 깨진 링크는 메인 노트의 링크를
 실제 조각 파일명으로, 허용 목록 밖 값은 허용 값으로 Edit한 뒤 재실행해 `ok`를 확인한다.
 
-### B-8. 보고
+### B-6. 보고
 
 ```text
 정리 완료: {N}편  ({구분별 편수})
 메인 노트: {경로}
 설교 조각: 신규 {A}개 · 건너뜀 {B}개
+충돌로 건너뜀: {있으면 편수와 노트 이름}
+이미 정리돼 건너뜀(재개): {resumed 있으면 편수}
 성경구절: {M}개 링크 · 확인 필요 {K}개
 분류: {요약, 분류를 쓸 때}
 읽지 못한 파일: {있으면 이유와 함께}
@@ -295,8 +324,8 @@ python3 scripts/verify_output.py "{manifest 경로}" --config "{config}"
 - `scripts/guess_naming.py` — 설교 구분과 파일명 규칙 추론
 - `scripts/parse_word_source.py` — 분류 노트에서 허용 목록 추출 (`--sermon-only`: 설교용 부분집합)
 - `scripts/ensure_tools.py` — 형식별 변환 도구 점검·격리 설치
-- `scripts/list_fragments.py` — 기존 조각 제목 목록
+- `scripts/list_fragments.py` — 기존 조각 제목 목록 / `--match-file`로 제목 초안별 근접 후보만 반환
 - `scripts/config_loader.py` — 설정 로드·검증
-- `scripts/scan_inputs.py` · `extract_text.py` · `extract_meta.py` · `extract_bible_refs.py`
-- `scripts/build_notes.py` — 미리보기 / `--write --approve WRITE`일 때만 실제 생성
+- `scripts/scan_inputs.py` · `extract_text.py`(추출 캐시 내장) · `extract_meta.py` · `extract_bible_refs.py`
+- `scripts/build_notes.py` — 미리보기 / `--write --approve WRITE`일 때만 실제 생성. 청크 폴더 입력·`--resume`·`--skip-conflicts`(승인 후) 지원
 - `scripts/verify_output.py` — 결과 검증

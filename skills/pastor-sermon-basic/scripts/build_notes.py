@@ -24,7 +24,7 @@ import sys
 from typing import Any, Iterable
 
 from config_loader import load_config
-from extract_text import SUPPORTED, extract as extract_text
+from extract_text import SUPPORTED, extract as extract_text, extract_cached
 from extract_meta import extract_meta
 from note_utils import (
     check_title_style,
@@ -132,14 +132,27 @@ def split_fragments(text: str, sermon_id: str) -> list[dict[str, Any]]:
     return fragments[:20]
 
 
-def load_injection(path: str | None) -> dict[str, Any]:
-    """Load LLM analysis JSON keyed by source path or file name."""
+def load_injection(path: str | None, notes: list[str] | None = None) -> dict[str, Any]:
+    """Load LLM analysis JSON keyed by source path or file name.
+
+    경로가 폴더면 그 안의 `*.json` 을 파일명 순으로 병합한다 — 대량 import 를
+    청크(몇 편씩)로 나눠 분석한 결과를 그대로 받기 위해서다. 같은 소스 키가
+    겹치면 나중 파일이 이기고, notes 에 그 사실을 남긴다.
+    """
     if not path:
         return {}
-    data = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("injection JSON must be an object keyed by source path or name")
-    return data
+    target = Path(path).expanduser()
+    files = sorted(target.glob("*.json")) if target.is_dir() else [target]
+    merged: dict[str, Any] = {}
+    for file in files:
+        data = json.loads(file.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"injection JSON must be an object keyed by source path or name: {file}")
+        for key, value in data.items():
+            if key in merged and notes is not None:
+                notes.append(f"분석 JSON 중복 키 '{key}' — {file.name} 값을 사용")
+            merged[key] = value
+    return merged
 
 
 def lookup_injection(data: dict[str, Any], source: Path) -> Any:
@@ -398,7 +411,40 @@ def render_merged_fragment(merge: dict[str, Any], main_basename: str) -> str:
     return "\n".join(parts) + "\n"
 
 
-def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str, Any] | None = None, llm_word: dict[str, Any] | None = None) -> dict[str, Any]:
+def load_prior_imports(log_folder: Path) -> tuple[set[str], set[str]]:
+    """이전 manifest 들에서 이미 편입된 원고의 경로·sermon_id 를 모은다 (resume 용).
+
+    신형 manifest 는 `sources` 배열(source·sermon_id·action)을 갖는다. 충돌로
+    건너뛴 원고(`skip_conflict`)는 편입된 것이 아니므로 다음 실행에서 다시 보인다.
+    구형 manifest 에는 summary.fragment_modes 의 키가 소스 경로라 그것으로 대신한다
+    (구형은 충돌이 있으면 아예 쓰지 못했으므로 전부 편입된 원고다).
+    """
+    paths: set[str] = set()
+    ids: set[str] = set()
+    if not log_folder.exists():
+        return paths, ids
+    for manifest_path in sorted(log_folder.glob("import-manifest-*.json")):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        rows = manifest.get("sources")
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict) or row.get("action") == "skip_conflict":
+                    continue
+                if str(row.get("source") or ""):
+                    paths.add(str(row["source"]))
+                if str(row.get("sermon_id") or ""):
+                    ids.add(str(row["sermon_id"]))
+            continue
+        modes = (manifest.get("summary") or {}).get("fragment_modes") or {}
+        paths.update(str(source) for source in modes)
+    return paths, ids
+
+
+def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str, Any] | None = None, llm_word: dict[str, Any] | None = None,
+               resume: bool = False, use_cache: bool = True) -> dict[str, Any]:
     vault = Path(config["vault"]["path"]).expanduser()
     if not vault.exists():
         raise FileNotFoundError(f"vault not found: {vault}")
@@ -418,12 +464,26 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
     used_main_names: set[str] = set()
     items = []
     failures = []
+    resumed: list[dict[str, Any]] = []
+    prior_paths: set[str] = set()
+    prior_ids: set[str] = set()
+    if resume:
+        prior_paths, prior_ids = load_prior_imports(log_folder)
     for source in files:
+        if resume and str(source) in prior_paths:
+            # 경로가 일치하면 추출(변환)도 하기 전에 건너뛴다.
+            resumed.append({"source": str(source), "match": "path"})
+            continue
         try:
             warnings: list[str] = []
-            extracted = extract_text(source)
+            extracted = extract_cached(source) if use_cache else extract_text(source)
             text = str(extracted["text"])
             meta = extract_meta(source, text, config)
+            if resume and str(meta.get("sermon_id") or "") in prior_ids:
+                # 파일이 옮겨지거나 이름이 바뀌어도 같은 설교(sermon_id)면 잡는다.
+                resumed.append({"source": str(source), "match": "sermon_id",
+                                "sermon_id": str(meta["sermon_id"])})
+                continue
             warnings.extend(str(w) for w in (extracted.get("warnings") or []))
             sermon_kind = str(meta.get("sermon_kind") or "")
             main_name = apply_pattern(config["naming"]["main_note_pattern"], {
@@ -542,7 +602,7 @@ def build_plan(input_path: Path, config: dict[str, Any], llm_fragments: dict[str
             })
         except Exception as exc:
             failures.append({"source": str(source), "error": str(exc), "type": type(exc).__name__})
-    return {"created": datetime.now().isoformat(timespec="minutes"), "mode": "dry-run", "vault": str(vault), "log_folder": str(log_folder), "items": items, "failures": failures}
+    return {"created": datetime.now().isoformat(timespec="minutes"), "mode": "dry-run", "vault": str(vault), "log_folder": str(log_folder), "items": items, "failures": failures, "resumed": resumed}
 
 
 def summarize_plan(plan: dict[str, Any]) -> dict[str, Any]:
@@ -578,10 +638,13 @@ def summarize_plan(plan: dict[str, Any]) -> dict[str, Any]:
             elif action == "skip":
                 skips.append(frag["path"])
         warnings.extend(item.get("warnings", []))
+    warnings.extend(plan.get("notes", []))
     return {
         "created": plan["created"],
         "sources": len(plan["items"]),
         "failed_sources": len(plan.get("failures", [])),
+        "resumed_sources": len(plan.get("resumed", [])),
+        "resumed": plan.get("resumed", []),
         "planned_files": len(files),
         "by_sermon_kind": by_kind,
         "fragment_modes": {item["source"]: item.get("fragment_mode", "") for item in plan["items"]},
@@ -594,35 +657,49 @@ def summarize_plan(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def write_plan(plan: dict[str, Any], config: dict[str, Any]) -> Path:
+def write_plan(plan: dict[str, Any], config: dict[str, Any], skip_conflicts: bool = False) -> Path:
     if config["safety"].get("overwrite_existing"):
         raise ValueError("overwrite_existing is forbidden")
     summary = summarize_plan(plan)
-    if summary["conflicts"]:
+    if summary["conflicts"] and not skip_conflicts:
+        # 기본값은 지금까지처럼 전체 중단. --skip-conflicts 는 dry-run 미리보기에서
+        # 충돌 목록을 승인받은 뒤에만 쓴다 — 충돌 설교만 건너뛰고 나머지를 쓴다.
         raise FileExistsError("existing notes block write: " + "; ".join(summary["conflicts"][:10]))
 
     written: list[str] = []
     skipped: list[str] = []
     merged: list[str] = []
     files_log: list[dict[str, Any]] = []
+    sources_log: list[dict[str, Any]] = []
 
     for item in plan["items"]:
         main_path = Path(item["main"]["path"])
         sermon_kind = str(item.get("sermon_kind") or "")
-        if item["main"].get("action") == "skip":
+        source_row = {"source": item.get("source", ""),
+                      "sermon_id": str((item.get("meta") or {}).get("sermon_id") or ""),
+                      "main": str(main_path)}
+        main_action = item["main"].get("action", "create")
+        if main_action == "conflict" and skip_conflicts:
+            main_action = "skip_conflict"
+        if main_action == "create" and main_path.exists():
+            # 계획 이후 나타난 노트 — 승인 없이 덮어쓰지 않는다.
+            if not skip_conflicts:
+                raise FileExistsError(f"existing note appeared before write: {main_path}")
+            main_action = "skip_conflict"
+        if main_action in ("skip", "skip_conflict"):
             # Skip the whole sermon so no fragment points at an unchanged main note.
             skipped.append(str(main_path))
             skipped.extend(frag["path"] for frag in item["fragments"])
-            files_log.append({"path": str(main_path), "kind": "main", "action": "skip",
+            files_log.append({"path": str(main_path), "kind": "main", "action": main_action,
                               "sermon_kind": sermon_kind})
+            sources_log.append({**source_row, "action": main_action})
             continue
-        if main_path.exists():
-            raise FileExistsError(f"existing note appeared before write: {main_path}")
         main_path.parent.mkdir(parents=True, exist_ok=True)
         main_path.write_text(item["main"]["content"], encoding="utf-8")
         written.append(str(main_path))
         files_log.append({"path": str(main_path), "kind": "main", "action": "create",
                           "sermon_kind": sermon_kind})
+        sources_log.append({**source_row, "action": "create"})
 
         for frag in item["fragments"]:
             frag_path = Path(frag["path"])
@@ -632,6 +709,14 @@ def write_plan(plan: dict[str, Any], config: dict[str, Any]) -> Path:
             if action == "skip":
                 skipped.append(str(frag_path))
                 files_log.append(row)
+                continue
+
+            if action == "conflict":
+                if not skip_conflicts:
+                    raise FileExistsError(f"existing fragment blocks write: {frag_path}")
+                # 메인 노트의 [[링크]]는 이미 있는 동명 조각을 가리키게 된다.
+                skipped.append(str(frag_path))
+                files_log.append({**row, "action": "skip_conflict"})
                 continue
 
             if action == "merge":
@@ -669,6 +754,7 @@ def write_plan(plan: dict[str, Any], config: dict[str, Any]) -> Path:
         "skipped": skipped,
         "merged": merged,
         "files": files_log,
+        "sources": sources_log,
         "summary": summary,
     }
     manifest_path = log_folder / f"import-manifest-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
@@ -680,24 +766,30 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="sermon file or folder")
     parser.add_argument("--config", help="config JSON path")
-    parser.add_argument("--fragments", help="LLM 조각 분해 결과 JSON (source 경로/파일명 → 조각 목록)")
-    parser.add_argument("--word", help="LLM WORD 분류 제안 JSON (source 경로/파일명 → 분류 객체)")
+    parser.add_argument("--fragments", help="LLM 조각 분해 결과 JSON — 파일 또는 청크 JSON 폴더 (source 경로/파일명 → 조각 목록)")
+    parser.add_argument("--word", help="LLM WORD 분류 제안 JSON — 파일 또는 청크 JSON 폴더 (source 경로/파일명 → 분류 객체)")
     parser.add_argument("--write", action="store_true", help="write files; default is dry-run only")
     parser.add_argument("--approve", default="", help="must be WRITE for --write")
     parser.add_argument("--full", action="store_true", help="include generated content in dry-run JSON")
+    parser.add_argument("--resume", action="store_true", help="이전 manifest에 기록된 원고는 건너뛴다 (경로 또는 sermon_id 일치)")
+    parser.add_argument("--skip-conflicts", action="store_true", help="충돌 노트만 건너뛰고 나머지를 쓴다 — dry-run에서 충돌 목록 승인 후에만")
+    parser.add_argument("--no-cache", action="store_true", help="추출 캐시를 쓰지 않고 매번 다시 변환한다")
     args = parser.parse_args(argv[1:])
 
     config = load_config(args.config)
-    llm_fragments = load_injection(args.fragments)
-    llm_word = load_injection(args.word)
-    plan = build_plan(Path(args.input).expanduser(), config, llm_fragments, llm_word)
+    notes: list[str] = []
+    llm_fragments = load_injection(args.fragments, notes)
+    llm_word = load_injection(args.word, notes)
+    plan = build_plan(Path(args.input).expanduser(), config, llm_fragments, llm_word,
+                      resume=args.resume, use_cache=not args.no_cache)
+    plan["notes"] = notes
     summary = summarize_plan(plan)
     if args.write:
         if args.approve != "WRITE":
             print(json.dumps({"status": "blocked", "reason": "--write requires --approve WRITE", "summary": summary}, ensure_ascii=False, indent=2))
             return 2
         try:
-            manifest = write_plan(plan, config)
+            manifest = write_plan(plan, config, skip_conflicts=args.skip_conflicts)
         except FileExistsError as exc:
             print(json.dumps({"status": "blocked", "reason": str(exc), "summary": summary}, ensure_ascii=False, indent=2))
             return 1

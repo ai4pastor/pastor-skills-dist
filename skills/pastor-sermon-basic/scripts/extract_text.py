@@ -17,6 +17,7 @@ The source file is read-only; this script never modifies it.
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import json
 import os
 import re
@@ -27,6 +28,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from config_loader import work_dir  # noqa: E402
 from ensure_tools import activate_pylibs  # noqa: E402
 
 SUPPORTED = {".docx", ".md", ".txt", ".pdf", ".hwpx", ".hwp"}
@@ -269,16 +271,62 @@ def extract(path: Path) -> dict[str, object]:
     return result
 
 
+def cache_dir() -> Path:
+    """추출 캐시 폴더 — 같은 원고를 dry-run·write가 다시 변환하지 않게 한다."""
+    return work_dir() / "extracted"
+
+
+def cache_key(path: Path) -> str:
+    """파일 **내용** 기준 키 — 원고가 한 글자라도 바뀌면 캐시가 자연히 빗나간다."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def extract_cached(path: Path, refresh: bool = False) -> dict[str, object]:
+    """extract() 결과를 내용 해시로 캐시한다.
+
+    hwp/pdf/docx 변환은 파일마다 서브프로세스를 띄우는 비싼 일이라, 한 import 안에서
+    추출(Step 2)·dry-run·write 가 같은 변환을 세 번 반복하지 않도록 여기서 한 번만 한다.
+    실패한 추출은 캐시하지 않는다 — 도구를 설치하고 다시 돌리면 곧바로 재시도된다.
+    """
+    entry = cache_dir() / f"{cache_key(path)}.json"
+    if not refresh and entry.is_file():
+        try:
+            cached = json.loads(entry.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            cached = None
+        if isinstance(cached, dict) and "text" in cached:
+            # 내용이 같은 파일이 다른 이름·경로로 올 수 있다 — 위치 정보만 현재 값으로.
+            cached["path"] = str(path)
+            cached["name"] = path.name
+            cached["cache"] = "hit"
+            return cached
+    result = extract(path)
+    entry.parent.mkdir(parents=True, exist_ok=True)
+    entry.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+    result["cache"] = "miss"
+    return result
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: extract_text.py <file>", file=sys.stderr)
+    flags = {a for a in argv[1:] if a.startswith("--")}
+    positional = [a for a in argv[1:] if not a.startswith("--")]
+    if len(positional) != 1 or not flags <= {"--no-cache", "--refresh"}:
+        print("usage: extract_text.py <file> [--no-cache] [--refresh]", file=sys.stderr)
         return 2
-    path = Path(argv[1]).expanduser()
+    path = Path(positional[0]).expanduser()
     if not path.exists() or not path.is_file():
         print(f"not a file: {path}", file=sys.stderr)
         return 1
     try:
-        print(json.dumps(extract(path), ensure_ascii=False, indent=2))
+        if "--no-cache" in flags:
+            result = extract(path)
+        else:
+            result = extract_cached(path, refresh="--refresh" in flags)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except Exception as exc:
         print(json.dumps({"path": str(path), "status": "error", "error": str(exc)}, ensure_ascii=False, indent=2))

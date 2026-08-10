@@ -57,6 +57,7 @@ Claude가 알아서 설치해 드립니다. 명령어를 외우실 필요 없습
 - 원본 설교 파일을 수정·이동·삭제하지 않습니다.
 - 이미 있는 노트를 덮어쓰지 않습니다. 같은 이름이 있으면 멈추고 물어봅니다.
 - 노트를 만들기 전에 항상 미리보기를 보여주고 승인을 받습니다.
+- 대량 정리가 중간에 끊겨도 처음부터 다시 하지 않습니다 — 이어서 정리합니다.
 
 자세한 사용법은 각 스킬 폴더의 `INSTALL.md` 를 보세요.
 
@@ -68,6 +69,9 @@ Claude에게 "pastor-skills 업데이트해 줘" 라고 하시거나, 직접 입
 /plugin marketplace update ai4pastor
 /plugin update pastor-skills@ai4pastor
 ```
+
+매번 입력하기 번거로우시면 한 번만 켜 두세요 — 이후 새 버전이 자동으로 반영됩니다:
+`/plugin` 입력 → Marketplaces 탭 → `ai4pastor` 선택 → **Enable auto-update**.
 
 설정 파일(`~/.pastor-sermon-import/config.json`)은 업데이트해도 그대로 유지됩니다.
 

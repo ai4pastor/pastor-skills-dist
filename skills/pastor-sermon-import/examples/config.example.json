@@ -29,7 +29,7 @@
   },
   "naming": {
     "main_note_pattern": "{date}_{title}_{main_passage}.md",
-    "fragment_note_pattern": "{sermon_id}_{title}.md",
+    "fragment_note_pattern": "{title}.md",
     "date_from_filename": true,
     "target_from_folder": true,
     "collision_policy": "ask",

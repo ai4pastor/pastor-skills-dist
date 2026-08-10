@@ -69,7 +69,9 @@ def default_config() -> dict[str, Any]:
         },
         "naming": {
             "main_note_pattern": "{date}_{title}_{main_passage}.md",
-            "fragment_note_pattern": "{sermon_id}_{title}.md",
+            # 조각 파일명은 제목 그대로 — 설교ID가 붙으면 같은 생각이 설교마다
+            # 다른 파일로 갈라져 "기존 제목 재사용"(중복 방지·병합)이 성립하지 않는다.
+            "fragment_note_pattern": "{title}.md",
             "date_from_filename": True,
             "target_from_folder": True,
             "collision_policy": "ask",

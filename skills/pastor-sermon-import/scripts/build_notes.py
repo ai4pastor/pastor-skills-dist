@@ -309,8 +309,9 @@ def render_main_note(meta: dict[str, Any], text: str, fragments: list[dict[str, 
     fields[bible_key] = ok_bible_links
     # Provenance fields come after the classification block so the fields the
     # pastor's guideline orders (created → … → 성경구절) stay in that order.
+    # 원본 경로는 노트에 남기지 않는다 — 사용자명이 든 절대경로가 볼트에 박히고,
+    # 같은 설교의 추적은 manifest 의 sermon_id 가 담당한다 (2026-08-13 제품 결정).
     fields.update({
-        "source_file": meta["source_path"],
         "sermon_id": meta["sermon_id"],
         "title": meta["title"],
         "date": meta.get("date", ""),

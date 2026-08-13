@@ -21,6 +21,11 @@ from note_utils import compare_key, sanitize_title
 DATE_PATTERNS = [
     re.compile(r"(?P<date>\d{6})[_\-\s]+(?P<rest>.+)$"),
     re.compile(r"(?P<date>\d{4}[-.]?\d{2}[-.]?\d{2})[_\-\s]+(?P<rest>.+)$"),
+    # 제로패딩 없는 앞자리 날짜 ("2026-7-19 제목") — 구분자가 있어야만 날짜로 본다.
+    re.compile(r"(?P<date>\d{4}[-.]\d{1,2}[-.]\d{1,2})[_\-\s.]+(?P<rest>.+)$"),
+    # 날짜가 뒤에 붙는 파일명 ("제목.2026-7-19.docx"). 구분자 있는 연-월-일만
+    # 인정해 제목 속 숫자(요한복음3-16 등)를 날짜로 오독하지 않는다.
+    re.compile(r"(?P<rest>.+?)[_\-\s.]+(?P<date>\d{4}[-.]\d{1,2}[-.]\d{1,2})$"),
 ]
 
 
@@ -32,8 +37,11 @@ def normalize_date(raw: str) -> str:
         return f"{year:04d}-{raw[2:4]}-{raw[4:6]}"
     if re.fullmatch(r"\d{8}", raw):
         return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
-    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
-        return raw
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", raw)
+    if m:
+        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1900 <= year <= 2099 and 1 <= month <= 12 and 1 <= day <= 31:
+            return f"{year:04d}-{month:02d}-{day:02d}"
     return ""
 
 
@@ -134,10 +142,15 @@ def parse_filename(path: Path, config: dict[str, Any] | None = None) -> dict[str
     if naming.get("date_from_filename", True):
         for pat in DATE_PATTERNS:
             m = pat.match(stem)
-            if m:
-                date = normalize_date(m.group("date"))
-                rest = m.group("rest")
-                break
+            if not m:
+                continue
+            normalized = normalize_date(m.group("date"))
+            if not normalized:
+                # 날짜 꼴이지만 값이 안 되는 숫자("1004-2-3")면 제목을 깎지 않는다.
+                continue
+            date = normalized
+            rest = m.group("rest")
+            break
 
     target = ""
     title = rest

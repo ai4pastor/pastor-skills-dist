@@ -205,7 +205,7 @@ def ensure_relative_folder(folder: str) -> Path:
 
 
 DATE_VALUE_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?\Z")
-YAML_SPECIAL_RE = re.compile(r"""[:\[\]{}&*!|>%@#,"']""")
+YAML_SPECIAL_RE = re.compile(r"""[:\[\]{}&*!|>%@#,"'\\]""")
 
 
 def needs_quote(value: str) -> bool:
@@ -226,8 +226,18 @@ def needs_quote(value: str) -> bool:
     return bool(YAML_SPECIAL_RE.search(value))
 
 
+def yaml_quote(value: str) -> str:
+    """Double-quote a scalar with YAML escaping.
+
+    Backslashes must double before quoting — a Windows path ("C:\\Users\\…")
+    written verbatim turns \\U into an invalid escape and breaks the whole
+    frontmatter block in Obsidian.
+    """
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def yaml_scalar(value: str) -> str:
-    return f'"{value}"' if needs_quote(value) else value
+    return yaml_quote(value) if needs_quote(value) else value
 
 
 def yaml_list(key: str, values: Iterable[str], quote: bool | None = None) -> list[str]:
@@ -239,7 +249,7 @@ def yaml_list(key: str, values: Iterable[str], quote: bool | None = None) -> lis
     for value in values:
         text = str(value)
         use_quote = needs_quote(text) if quote is None else quote
-        rows.append(f'  - "{text}"' if use_quote else f"  - {text}")
+        rows.append(f"  - {yaml_quote(text)}" if use_quote else f"  - {text}")
     return rows
 
 

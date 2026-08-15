@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Shared config contract for pastor-sermon-import.
+
+Single source of truth:
+- format: JSON
+- default home: ~/.pastor-sermon-import/  (override: PASTOR_SERMON_IMPORT_HOME)
+- default path: <home>/config.json
+- optional vault-local path: <vault>/.vault-sermon-import/config.json
+
+Paths are resolved through home()/config_path()/work_dir() rather than module
+constants so that an isolated test environment can redirect them with one
+environment variable. With the variable unset the behaviour is unchanged.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+import json
+import os
+import re
+from typing import Any
+
+HOME_ENV_VAR = "PASTOR_SERMON_IMPORT_HOME"
+DEFAULT_HOME = "~/.pastor-sermon-import"
+
+REQUIRED_TOP_LEVEL = {"vault", "input", "output", "naming", "classification", "bible", "safety"}
+
+
+def home() -> Path:
+    """Base directory for config and work files."""
+    return Path(os.environ.get(HOME_ENV_VAR) or DEFAULT_HOME).expanduser()
+
+
+def work_dir() -> Path:
+    """Directory for LLM hand-off files (fragments.json, word.json)."""
+    return home() / "work"
+
+
+def pylibs_dir() -> Path:
+    """Isolated install target for the optional converters (pypdf, pyhwp, …).
+
+    Kept under home() so the pastor's system Python stays untouched and an
+    isolated test environment redirects it with the same one variable.
+    """
+    return home() / "tools" / "pylibs"
+
+
+def default_config() -> dict[str, Any]:
+    """The contract. Allow-lists stay empty here on purpose.
+
+    A preset (data/word_preset.a4p.json) may fill classification.*_values, but
+    only after the pastor picks it during onboarding. Shipping anyone's personal
+    taxonomy as a default is what the empty lists guard against, and
+    tests/pastor-sermon-import/ asserts they stay empty.
+    """
+    return {
+        "version": 2,
+        "vault": {"path": ""},
+        "input": {"sermon_sources": [], "file_types": ["docx", "md", "txt", "pdf", "hwpx", "hwp"]},
+        "output": {"main_sermon_folder": "", "fragment_folder": "", "log_folder": ".vault-sermon-import/logs"},
+        # 설교 구분(주일대예배·수요기도회·새벽기도회 …). 값은 온보딩에서만 채운다 —
+        # 목회 현장마다 예배 이름이 달라 기본값을 심으면 남의 볼트에서 곧바로 어긋난다.
+        "sermon_kinds": {
+            "enabled": False,
+            "values": [],
+            "marker_to_kind": {},
+            "frontmatter_key": "설교구분",
+            "folder_by_kind": {},
+            "world_by_kind": {},
+        },
+        "naming": {
+            "main_note_pattern": "{date}_{title}_{main_passage}.md",
+            # 조각 파일명은 제목 그대로 — 설교ID가 붙으면 같은 생각이 설교마다
+            # 다른 파일로 갈라져 "기존 제목 재사용"(중복 방지·병합)이 성립하지 않는다.
+            "fragment_note_pattern": "{title}.md",
+            "date_from_filename": True,
+            "target_from_folder": True,
+            "collision_policy": "ask",
+            "fragment_collision_policy": "skip",
+            "target_markers": [],
+            "folder_to_target": {},
+            "folder_number_prefix_strip": True,
+        },
+        "classification": {
+            "use_word": False,
+            "world_values": [],
+            "outcome_values": [],
+            "route_values": [],
+            "doctrine_values": [],
+            "allow_unknown_doctrine": False,
+            "route_scalar": False,
+            "single_world": False,
+            "require_value_prefix": {},
+            "wrap_values_in_wikilink": False,
+            "fragment_world": "",
+            "preset": "",
+        },
+        "bible": {
+            "link_style": "[[{normalized}]]",
+            "range_policy": "expand_each_verse",
+            "max_range_expand": 50,
+            "note_folder": "",
+            "book_aliases": {},
+            "frontmatter_key": "성경구절",
+        },
+        "safety": {
+            "dry_run_first": True,
+            "overwrite_existing": False,
+            "require_approval_before_write": True,
+            "preserve_original_files": True,
+        },
+    }
+
+
+def config_path(vault_path: str | None = None) -> Path:
+    if vault_path:
+        candidate = Path(vault_path).expanduser() / ".vault-sermon-import" / "config.json"
+        if candidate.exists():
+            return candidate
+    return home() / "config.json"
+
+
+def merge_defaults(user: dict[str, Any], defaults: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Fill missing keys from the defaults, recursively.
+
+    This is what lets a config written by an older version load unchanged: new
+    keys arrive with their defaults instead of raising KeyError, so no migration
+    step is needed when the contract grows.
+    """
+    out = dict(default_config() if defaults is None else defaults)
+    for key, value in (user or {}).items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = merge_defaults(value, out[key])
+        else:
+            out[key] = value
+    return out
+
+
+def load_config(path: str | Path | None = None, vault_path: str | None = None) -> dict[str, Any]:
+    p = Path(path).expanduser() if path else config_path(vault_path)
+    data = merge_defaults(json.loads(p.read_text(encoding="utf-8")))
+    validate_config(data)
+    return data
+
+
+def save_config(config: dict[str, Any], path: str | Path | None = None) -> Path:
+    validate_config(config)
+    p = Path(path).expanduser() if path else config_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return p
+
+
+def validate_sermon_kinds(kinds: Any) -> None:
+    """Check the sermon-kind block.
+
+    The block is optional so a config written before it existed still loads
+    (merge_defaults fills it in on the load path). Mapping keys are required to
+    be declared kinds: a typo in folder_by_kind would otherwise route sermons to
+    the default folder silently, which the pastor only notices much later.
+    """
+    if kinds is None:
+        return
+    if not isinstance(kinds, dict):
+        raise ValueError("sermon_kinds must be an object")
+    values = kinds.get("values", [])
+    if not isinstance(values, list) or any(not isinstance(v, str) for v in values):
+        raise ValueError("sermon_kinds.values must be a list of strings")
+    if not isinstance(kinds.get("frontmatter_key", ""), str):
+        raise ValueError("sermon_kinds.frontmatter_key must be a string")
+    declared = {v.strip() for v in values if v.strip()}
+    if kinds.get("enabled") and not declared:
+        raise ValueError("sermon_kinds.enabled is true but sermon_kinds.values is empty")
+    for key in ("marker_to_kind", "folder_by_kind", "world_by_kind"):
+        mapping = kinds.get(key, {})
+        if not isinstance(mapping, dict):
+            raise ValueError(f"sermon_kinds.{key} must be an object")
+        # marker_to_kind maps marker → kind; the other two map kind → value.
+        referenced = list(mapping.values()) if key == "marker_to_kind" else list(mapping)
+        unknown = sorted({str(v).strip() for v in referenced if str(v).strip()} - declared)
+        if unknown:
+            raise ValueError(f"sermon_kinds.{key} refers to undeclared kinds: {', '.join(unknown)}")
+    for kind, folder in (kinds.get("folder_by_kind") or {}).items():
+        p = Path(str(folder))
+        if p.is_absolute() or ".." in p.parts:
+            raise ValueError(f"sermon_kinds.folder_by_kind['{kind}'] must be a vault-relative folder: {folder}")
+
+
+def validate_config(config: dict[str, Any]) -> None:
+    missing = REQUIRED_TOP_LEVEL - set(config)
+    if missing:
+        raise ValueError(f"config missing top-level keys: {', '.join(sorted(missing))}")
+    if config["safety"].get("overwrite_existing") is True:
+        raise ValueError("unsafe config: safety.overwrite_existing must be false by default")
+    if config["safety"].get("preserve_original_files") is not True:
+        raise ValueError("unsafe config: safety.preserve_original_files must be true")
+    # These two used to be declarative only. Enforcing them keeps the config from
+    # promising a safety property the pastor does not actually get.
+    if config["safety"].get("dry_run_first", True) is not True:
+        raise ValueError("unsafe config: safety.dry_run_first must be true")
+    if config["safety"].get("require_approval_before_write", True) is not True:
+        raise ValueError("unsafe config: safety.require_approval_before_write must be true")
+    if not isinstance(config["input"].get("sermon_sources"), list):
+        raise ValueError("input.sermon_sources must be a list")
+
+    naming = config["naming"]
+    if naming.get("collision_policy", "ask") not in {"ask", "skip"}:
+        raise ValueError("naming.collision_policy must be 'ask' or 'skip'")
+    if naming.get("fragment_collision_policy", "skip") not in {"ask", "skip", "merge"}:
+        raise ValueError("naming.fragment_collision_policy must be 'ask', 'skip', or 'merge'")
+    if not isinstance(naming.get("target_markers", []), list):
+        raise ValueError("naming.target_markers must be a list")
+    if not isinstance(naming.get("folder_to_target", {}), dict):
+        raise ValueError("naming.folder_to_target must be an object")
+    validate_sermon_kinds(config.get("sermon_kinds"))
+
+    if not isinstance(config["classification"].get("require_value_prefix", {}), dict):
+        raise ValueError("classification.require_value_prefix must be an object")
+    if config["classification"].get("use_word"):
+        for key in ("world_values", "outcome_values", "route_values", "doctrine_values"):
+            if not isinstance(config["classification"].get(key), list):
+                raise ValueError(f"classification.{key} must be a list")
+    allowed_placeholders = {"{normalized}", "{book}", "{chapter}", "{verse}"}
+    style = config["bible"].get("link_style", "")
+    if "{normalized}" not in style:
+        # Other placeholders may be supported later, but normalized is the safe MVP contract.
+        raise ValueError("bible.link_style must include {normalized}")
+    unknown_placeholders = set("{" + name + "}" for name in re.findall(r"\{([^{}]+)\}", style)) - allowed_placeholders
+    if unknown_placeholders:
+        raise ValueError(f"unsupported bible.link_style placeholders: {', '.join(sorted(unknown_placeholders))}")
+
+
+if __name__ == "__main__":
+    import sys
+    cfg = load_config(sys.argv[1]) if len(sys.argv) > 1 else default_config()
+    print(json.dumps(cfg, ensure_ascii=False, indent=2))

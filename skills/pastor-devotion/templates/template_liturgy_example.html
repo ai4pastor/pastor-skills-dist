@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>5일 묵상 — 넘어져도, 돌아갈 곳 · 전례 (사도신경 강해 18)</title>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/suit@3.0.1/dist/suit.css">
+<style>
+  /* 팔레트는 전례 커스텀 — 세리프 위계는 theverge DESIGN.md 참조
+     (큰 표제 · 정제된 본문 · 명확한 규칙선의 에디토리얼 위계만 차용, 색은 차용하지 않음) */
+  :root {
+    --navy: #0f1b3d;        /* 딥 네이비 — 전례 배경 */
+    --navy-deep: #0a1330;   /* 네이비 심층(그라디언트 아닌 단색 변주) */
+    --gold: #c9a227;        /* 골드 — 괘선·장식·표제 */
+    --gold-muted: #a08a3c;  /* 뮤트 골드 — 보조 괘선·메타 */
+    --ivory: #f7f3e8;       /* 아이보리 — 지면 */
+    --ink: #23252e;         /* 잉크 — 본문 */
+    --ink-soft: #4a4d58;    /* 잉크 보조 */
+    --on-navy: #ece5d3;     /* 네이비 위 텍스트 */
+    --on-navy-soft: #a9a493;/* 네이비 위 보조 텍스트 */
+    --rule: rgba(201, 162, 39, 0.42);        /* 아이보리 위 가는 골드 괘선 */
+    --rule-soft: rgba(35, 37, 46, 0.14);     /* 아이보리 위 잉크 괘선 */
+    --rule-on-navy: rgba(201, 162, 39, 0.38);/* 네이비 위 가는 골드 괘선 */
+    --font-display: "Nanum Myeongjo", "NanumMyeongjo", "Noto Serif KR", Georgia, serif;
+    --font-sans: "SUIT", "SUIT Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: var(--font-sans); background: #060b1c; -webkit-font-smoothing: antialiased; }
+
+  .display-2xl, .display-xl, .display-md, .series, .subtitle,
+  .rubric, .rubric-lg, .day-title, .key-line, .gloss,
+  .lection .quote, .lection .cite, .homily .quote, .homily .src,
+  .question, .prayer, .respond,
+  .call-prayer, .closing-prayer, .closing-line, .amen,
+  .toc-item .no, .toc-item .ttl, .toc-item .ref,
+  .three-words .word, .three-words .dot, .corner {
+    word-break: keep-all; overflow-wrap: break-word;
+  }
+
+  .stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .deck {
+    position: relative; aspect-ratio: 16 / 9;
+    width: 100vw; height: auto; max-height: 100vh;
+    background: var(--ivory); overflow: hidden;
+  }
+  @supports not (aspect-ratio: 16 / 9) { .deck { width: 100vw; height: 56.25vw; } }
+
+  .reel { position: relative; width: 100%; height: 100%; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: clamp(34px, 5vh, 66px) clamp(40px, 6vw, 104px);
+    opacity: 0; pointer-events: none;
+    transform: translateX(100%);
+    overflow: auto;
+  }
+  .slide.is-animating { transition: transform 0.6s cubic-bezier(.65,0,.2,1), opacity 0.5s ease; }
+  .slide.is-current { opacity: 1; pointer-events: auto; transform: translateX(0); z-index: 2; }
+  .slide.is-prev { transform: translateX(-100%); opacity: 1; }
+  .slide.is-next { transform: translateX(100%); opacity: 1; }
+
+  .bg-ivory { background: var(--ivory); color: var(--ink); }
+  .bg-navy { background: var(--navy); color: var(--on-navy); }
+  .bg-navy-deep { background: var(--navy-deep); color: var(--on-navy); }
+
+  .slide-inner { width: 100%; max-width: 1080px; margin: 0 auto; text-align: center; }
+
+  /* ── 공통 전례 요소 ─────────────────────────────── */
+  .rubric {
+    display: inline-block;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(11px, 0.92vw, 13px);
+    letter-spacing: 0.34em; text-indent: 0.34em;
+    color: var(--gold-muted); text-transform: uppercase;
+  }
+  .bg-navy .rubric, .bg-navy-deep .rubric { color: var(--gold); }
+  .rubric-lg {
+    display: inline-block;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(12px, 1.05vw, 15px);
+    letter-spacing: 0.4em; text-indent: 0.4em;
+    color: var(--gold);
+  }
+
+  /* 가는 골드 괘선 — 중앙 정렬 짧은 규칙선 */
+  .hair {
+    width: 64px; height: 1px; margin: clamp(14px, 1.6vh, 20px) auto;
+    background: var(--gold); opacity: 0.65;
+  }
+  .bg-navy .hair, .bg-navy-deep .hair { background: var(--gold); opacity: 0.7; }
+
+  /* ── 1. 표지 ────────────────────────────────────── */
+  .cover-frame {
+    position: absolute;
+    inset: clamp(16px, 2.1vh, 28px) clamp(20px, 2.2vw, 36px);
+    border: 1px solid var(--gold);
+    pointer-events: none; z-index: 3;
+  }
+  .cover-frame::before {
+    content: ""; position: absolute; inset: 7px;
+    border: 1px solid var(--gold-muted); opacity: 0.5;
+  }
+  .series {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(13px, 1.1vw, 16px);
+    letter-spacing: 0.3em; text-indent: 0.3em;
+    color: var(--gold-muted);
+  }
+  .display-2xl {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(46px, 6.4vw, 96px);
+    line-height: 1.14; letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .display-xl {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(34px, 4.4vw, 62px);
+    line-height: 1.2; letter-spacing: -0.016em;
+  }
+  .display-md {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(22px, 2.6vw, 36px);
+    line-height: 1.3; letter-spacing: -0.01em;
+  }
+  .subtitle {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(14px, 1.25vw, 18px);
+    line-height: 1.7; color: var(--ink-soft);
+    max-width: 40em; margin: 0 auto;
+  }
+
+  /* 표지 목차 */
+  .toc { margin-top: clamp(18px, 2.4vh, 32px); border-top: 1px solid var(--rule); }
+  .toc-item {
+    display: grid; grid-template-columns: 3.4em 1fr auto;
+    align-items: baseline; gap: clamp(10px, 1.2vw, 18px);
+    padding: clamp(7px, 0.95vh, 11px) clamp(6px, 1.4vw, 22px);
+    border-bottom: 1px solid var(--rule);
+    text-align: left; cursor: pointer;
+    transition: background 0.18s ease;
+  }
+  .toc-item:hover { background: rgba(201, 162, 39, 0.09); }
+  .toc-item:focus-visible { outline: 1px solid var(--gold); outline-offset: -1px; }
+  .toc-item .no {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(11px, 0.95vw, 13px); letter-spacing: 0.16em;
+    color: var(--gold-muted);
+  }
+  .toc-item .ttl {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(14px, 1.25vw, 18px); color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+  .toc-item .ref {
+    font-family: var(--font-sans); font-weight: 600;
+    font-size: clamp(11px, 0.95vw, 13px); letter-spacing: 0.08em;
+    color: var(--ink-soft);
+  }
+
+  /* ── 2. 부름 ────────────────────────────────────── */
+  .call-prayer {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(17px, 1.9vw, 27px);
+    line-height: 1.78; color: var(--on-navy);
+    max-width: 30em; margin: 0 auto;
+    text-align: left;
+  }
+  /* 골드 문자 장식 — 첫 글자를 전례서식 대문자 장식으로 */
+  .call-prayer::first-letter {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 2.5em; line-height: 0.9;
+    color: var(--gold);
+    float: left; margin: 0.06em 0.12em 0 0;
+  }
+  .versicle {
+    font-family: var(--font-display); font-weight: 700; font-style: italic;
+    font-size: clamp(14px, 1.3vw, 19px); line-height: 1.6;
+    color: var(--gold);
+  }
+
+  /* ── 3~7. Day 페이지 (전례 순서 3단) ─────────────── */
+  /* 봉독 → 말씀 → 묵상 → 응답 4단이 한 화면에 들어가도록 밀도를 좁힌다 */
+  .slide.day-odd, .slide.day-even {
+    padding-top: clamp(22px, 3.2vh, 44px);
+    padding-bottom: clamp(22px, 3.2vh, 44px);
+  }
+  .liturgy { display: block; }
+  .day-head { margin-bottom: clamp(6px, 0.9vh, 12px); }
+  .day-title {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(20px, 2.2vw, 32px);
+    line-height: 1.2; letter-spacing: -0.018em;
+    color: var(--ink); margin-top: 6px;
+  }
+  .day-meta {
+    display: block; margin-top: 6px;
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(10px, 0.85vw, 12px); letter-spacing: 0.18em;
+    color: var(--ink-soft); opacity: 0.85;
+  }
+
+  /* 홀수 day = 상단 장식 / 짝수 day = 하단 장식 */
+  .day-odd .liturgy::before,
+  .day-even .liturgy::after {
+    display: block; text-align: center;
+    content: "✦ ✦ ✦";
+    font-size: clamp(9px, 0.8vw, 11px);
+    letter-spacing: 0.75em; text-indent: 0.75em;
+    color: var(--gold);
+  }
+  .day-odd .liturgy::before {
+    border-top: 1px solid var(--rule);
+    padding-top: clamp(7px, 0.95vh, 11px);
+    margin-bottom: clamp(10px, 1.5vh, 20px);
+  }
+  .day-even .liturgy::after {
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: clamp(7px, 0.95vh, 11px);
+    margin-top: clamp(10px, 1.5vh, 20px);
+  }
+
+  .order-item {
+    padding-top: clamp(8px, 1.05vh, 14px);
+    margin-top: clamp(8px, 1.05vh, 14px);
+    border-top: 1px solid var(--rule);
+  }
+  .order-label {
+    display: block;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(10px, 0.85vw, 12px);
+    letter-spacing: 0.32em; text-indent: 0.32em;
+    color: var(--gold-muted);
+    margin-bottom: clamp(5px, 0.75vh, 9px);
+  }
+  .order-label .mark { color: var(--gold); margin-right: 0.55em; }
+
+  .lection .quote {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(14px, 1.25vw, 19px);
+    line-height: 1.62; color: var(--ink);
+    max-width: 44em; margin: 0 auto;
+  }
+  .lection .cite {
+    margin-top: 8px;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(10px, 0.85vw, 12px);
+    letter-spacing: 0.2em; color: var(--gold-muted);
+  }
+
+  /* 설교 발췌 — 가는 골드 괘선 사이의 세리프 인용 (봉독과 구분: 이탤릭·보조 잉크) */
+  .homily {
+    max-width: 42em; margin: 0 auto;
+    padding: clamp(9px, 1.2vh, 15px) 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .homily .quote {
+    font-family: var(--font-display); font-weight: 400; font-style: italic;
+    font-size: clamp(13px, 1.15vw, 17px);
+    line-height: 1.62; color: var(--ink-soft);
+  }
+  .homily .src {
+    margin-top: 8px;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(10px, 0.85vw, 12px);
+    letter-spacing: 0.2em; color: var(--gold-muted);
+  }
+  .bg-navy .homily, .bg-navy-deep .homily {
+    border-top-color: var(--rule-on-navy);
+    border-bottom-color: var(--rule-on-navy);
+  }
+  .bg-navy .homily .quote, .bg-navy-deep .homily .quote { color: var(--on-navy-soft); }
+  .bg-navy .homily .src, .bg-navy-deep .homily .src { color: var(--gold); }
+
+  .key-line {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(18px, 1.85vw, 28px);
+    line-height: 1.32; letter-spacing: -0.016em;
+    color: var(--ink);
+    max-width: 26em; margin: 0 auto;
+  }
+  .key-line .em { color: var(--gold-muted); }
+  .gloss {
+    margin-top: clamp(6px, 0.9vh, 11px);
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(12px, 1.0vw, 15px);
+    line-height: 1.6; color: var(--ink-soft);
+    max-width: 44em; margin-left: auto; margin-right: auto;
+  }
+
+  .question {
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(12px, 1.05vw, 15px);
+    line-height: 1.55; color: var(--ink);
+    max-width: 40em; margin: 0 auto;
+  }
+  .question .q-mark {
+    font-family: var(--font-display); font-weight: 800;
+    color: var(--gold); margin-right: 0.4em;
+  }
+  .prayer {
+    margin-top: clamp(7px, 1vh, 12px);
+    font-family: var(--font-display); font-weight: 700; font-style: italic;
+    font-size: clamp(13px, 1.15vw, 17px); line-height: 1.55;
+    color: var(--ink);
+  }
+  .respond {
+    display: inline-block;
+    margin-top: clamp(8px, 1.1vh, 13px);
+    padding-top: clamp(6px, 0.9vh, 10px);
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(12px, 1.05vw, 15px); line-height: 1.5;
+    color: var(--gold-muted); letter-spacing: 0.02em;
+  }
+  .respond .who {
+    display: block; margin-bottom: 4px;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(9px, 0.75vw, 11px);
+    letter-spacing: 0.3em; text-indent: 0.3em;
+    color: var(--ink-soft); opacity: 0.75;
+  }
+
+  /* ── 8. 한 주의 응답 ───────────────────────────── */
+  .three-words {
+    display: flex; align-items: center; justify-content: center;
+    gap: clamp(18px, 3.6vw, 58px);
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(46px, 7vw, 104px);
+    line-height: 1.05; letter-spacing: -0.02em;
+    color: var(--gold);
+  }
+  .three-words .word { display: inline-block; }
+  .three-words .dot { color: var(--gold-muted); font-size: 0.34em; transform: translateY(-0.5em); }
+  .closing-line {
+    margin-top: clamp(18px, 2.4vh, 30px);
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(15px, 1.5vw, 21px);
+    line-height: 1.65; color: var(--on-navy-soft);
+  }
+
+  /* ── 9. 축도 ───────────────────────────────────── */
+  .closing-prayer {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(21px, 2.5vw, 36px); line-height: 1.62;
+    color: var(--on-navy);
+  }
+  .closing-prayer .em { color: var(--gold); }
+  .amen {
+    margin-top: clamp(22px, 3vh, 38px);
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(13px, 1.15vw, 17px);
+    letter-spacing: 0.4em; text-indent: 0.4em;
+    color: var(--gold);
+  }
+
+  .corner {
+    position: absolute; bottom: 20px; z-index: 5;
+    font-family: var(--font-sans); font-weight: 600;
+    font-size: 12px; letter-spacing: 0.14em;
+    color: var(--gold-muted); pointer-events: none;
+  }
+  .deck.dark-mode .corner { color: var(--on-navy-soft); }
+  .corner.left { left: clamp(34px, 4.6vw, 76px); }
+  .corner.right { right: clamp(34px, 4.6vw, 76px); font-variant-numeric: tabular-nums; }
+
+  .nav-zone { position: absolute; top: 0; bottom: 0; width: 18%; z-index: 30; cursor: pointer; }
+  .nav-zone.left { left: 0; }
+  .nav-zone.right { right: 0; }
+  .nav-zone .arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1px solid var(--rule);
+    background: transparent; color: var(--gold-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; opacity: 0; transition: opacity 0.25s;
+  }
+  .nav-zone.left .arrow { left: 16px; }
+  .nav-zone.right .arrow { right: 16px; }
+  .nav-zone:hover .arrow { opacity: 1; }
+  .deck.dark-mode .nav-zone .arrow { border-color: var(--rule-on-navy); color: var(--gold); }
+
+  .build { opacity: 0; transform: translateY(12px); transition: opacity 0.55s ease, transform 0.55s cubic-bezier(.2,.7,.3,1); }
+  .slide.is-current .build { opacity: 1; transform: translateY(0); }
+  .slide.is-current .build:nth-of-type(1) { transition-delay: 0.05s; }
+  .slide.is-current .build:nth-of-type(2) { transition-delay: 0.18s; }
+  .slide.is-current .build:nth-of-type(3) { transition-delay: 0.32s; }
+  .slide.is-current .build:nth-of-type(4) { transition-delay: 0.46s; }
+  .slide.is-current .build:nth-of-type(5) { transition-delay: 0.6s; }
+
+  @media (max-width: 833px) {
+    .stage { background: var(--ivory); }
+    .deck { aspect-ratio: auto; width: 100vw; height: 100dvh; max-height: 100dvh; }
+    @supports not (height: 100dvh) { .deck { height: 100vh; max-height: 100vh; } }
+    .slide {
+      padding: 46px 20px calc(66px + env(safe-area-inset-bottom));
+      align-items: flex-start;
+    }
+
+    .cover-frame { inset: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+    .display-2xl { font-size: clamp(34px, 9.5vw, 48px); }
+    .display-xl { font-size: clamp(28px, 8vw, 40px); }
+    .display-md { font-size: clamp(20px, 5.6vw, 26px); }
+    .subtitle { font-size: clamp(13px, 3.5vw, 15px); line-height: 1.65; }
+
+    .toc-item { grid-template-columns: 2.8em 1fr; grid-template-areas: "no ttl" ". ref"; padding: 9px 4px; }
+    .toc-item .no { grid-area: no; }
+    .toc-item .ttl { grid-area: ttl; font-size: clamp(14px, 3.9vw, 16px); }
+    .toc-item .ref { grid-area: ref; font-size: 11px; margin-top: 2px; }
+
+    .call-prayer { font-size: clamp(16px, 4.2vw, 19px); line-height: 1.75; }
+    .slide.day-odd, .slide.day-even { padding-top: 40px; }
+    .day-title { font-size: clamp(21px, 6vw, 28px); }
+    .lection .quote { font-size: clamp(14px, 3.8vw, 17px); line-height: 1.66; }
+    .homily .quote { font-size: clamp(13px, 3.5vw, 16px); line-height: 1.66; }
+    .homily { padding: 10px 0; }
+    .key-line { font-size: clamp(18px, 5vw, 24px); }
+    .gloss { font-size: clamp(13px, 3.4vw, 15px); }
+    .question { font-size: clamp(13px, 3.6vw, 15px); }
+    .prayer { font-size: clamp(13px, 3.6vw, 16px); }
+    .respond { font-size: clamp(13px, 3.4vw, 15px); }
+
+    .three-words { flex-direction: column; gap: 10px; font-size: clamp(38px, 12vw, 56px); }
+    .three-words .dot { display: none; }
+    .closing-prayer { font-size: clamp(18px, 4.9vw, 23px); }
+    .closing-line { font-size: clamp(14px, 3.8vw, 16px); }
+
+    .corner { font-size: 10px; bottom: calc(18px + env(safe-area-inset-bottom)); letter-spacing: 0.08em; }
+    .corner.left { left: 16px; max-width: 60%; }
+    .corner.right { right: 16px; }
+
+    .nav-zone { width: 14%; }
+    .nav-zone .arrow { width: 34px; height: 34px; font-size: 15px; }
+  }
+  @media (max-width: 833px) and (orientation: landscape) {
+    .slide { padding: 22px 30px 36px; align-items: center; }
+    .display-2xl { font-size: clamp(28px, 6.4vw, 40px); }
+    .toc-item { grid-template-columns: 3em 1fr auto; grid-template-areas: "no ttl ref"; padding: 6px 8px; }
+    .toc-item .ref { margin-top: 0; }
+    .three-words { flex-direction: row; gap: 22px; font-size: clamp(38px, 9vw, 62px); }
+    .three-words .dot { display: inline; }
+    .key-line { font-size: clamp(18px, 4.4vw, 26px); }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="deck" id="deck">
+    <div class="corner left">넘어져도, 돌아갈 곳 · 5일 묵상</div>
+    <div class="corner right"><span id="curIdx">1</span> / <span id="totIdx">9</span></div>
+    <div class="nav-zone left" id="navLeft"><div class="arrow">←</div></div>
+    <div class="nav-zone right" id="navRight"><div class="arrow">→</div></div>
+
+    <div class="reel" id="reel">
+
+      <!-- 1. 표지 — 아이보리 · 골드 이중 괘선 프레임 -->
+      <section class="slide bg-ivory" data-bg="light">
+        <div class="cover-frame"></div>
+        <div class="slide-inner">
+          <div class="build">
+            <p class="series">사도신경 강해 18</p>
+          </div>
+          <div class="build">
+            <div class="hair"></div>
+            <h1 class="display-2xl">넘어져도,<br/>돌아갈 곳이<br/>있습니다.</h1>
+            <div class="hair"></div>
+          </div>
+          <div class="build">
+            <p class="subtitle">
+              "죄를 용서받는 것을 믿습니다." — 박해 후 돌아온 사람들의 자리에서 태어난 한 줄. 우리도 그 자리에서 한 주를 함께 살아갑니다.
+            </p>
+          </div>
+          <div class="build toc">
+            <div class="toc-item" data-goto="2" role="button" tabindex="0">
+              <span class="no">제 일 일</span>
+              <span class="ttl">돌아온 사람들</span>
+              <span class="ref">야고보서 4:6</span>
+            </div>
+            <div class="toc-item" data-goto="3" role="button" tabindex="0">
+              <span class="no">제 이 일</span>
+              <span class="ttl">단번에 끝난 용서</span>
+              <span class="ref">요한일서 1:9</span>
+            </div>
+            <div class="toc-item" data-goto="4" role="button" tabindex="0">
+              <span class="no">제 삼 일</span>
+              <span class="ttl">나도 넘어질 수 있다</span>
+              <span class="ref">고린도전서 10:12</span>
+            </div>
+            <div class="toc-item" data-goto="5" role="button" tabindex="0">
+              <span class="no">제 사 일</span>
+              <span class="ttl">그분의 신실함</span>
+              <span class="ref">디모데후서 2:13</span>
+            </div>
+            <div class="toc-item" data-goto="6" role="button" tabindex="0">
+              <span class="no">제 오 일</span>
+              <span class="ttl">같은 은혜 위에</span>
+              <span class="ref">로마서 3:23-24</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 부름 — 네이비 · 골드 문자 장식 -->
+      <section class="slide bg-navy" data-bg="dark">
+        <div class="slide-inner">
+          <div class="build">
+            <p class="rubric-lg">부름</p>
+            <div class="hair"></div>
+          </div>
+          <div class="build">
+            <p class="call-prayer">
+              주님, 우리는 오늘도 온전하지 못한 마음을 그대로 안고 이 자리에 나아옵니다. 스스로 감추어 둔 자리, 아직 용서하지 못한 자리, 다시 넘어질까 두려워 멈춰 선 자리를 숨기지 않고 내어놓습니다. 죄를 용서하시는 주님 앞에서, 이 한 주간 우리의 고백이 두려움이 아니라 돌아감이 되게 하소서. 부르시는 그 음성 앞에 조용히 마음을 엽니다.
+            </p>
+          </div>
+          <div class="build">
+            <div class="hair"></div>
+            <p class="versicle">— 우리를 부르시는 주님, 이 한 주를 여시옵소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. DAY 01 — 홀수: 상단 장식 -->
+      <section class="slide bg-ivory day-odd" data-bg="light">
+        <div class="slide-inner liturgy">
+          <div class="build day-head">
+            <p class="rubric">제 일 일 · 월요일</p>
+            <h2 class="day-title">돌아온 사람들</h2>
+            <span class="day-meta">첫째 날의 예배</span>
+          </div>
+          <div class="build order-item lection">
+            <span class="order-label"><span class="mark">✦</span>봉독</span>
+            <p class="quote">"하나님께서는 교만한 자들을 물리치시고, 겸손한 사람들에게 은혜를 주신다."</p>
+            <p class="cite">야고보서 4:6</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>말씀</span>
+            <div class="homily">
+              <p class="quote">"교회는 도대체 어떤 곳인가? 한 번도 넘어진 적 없는 사람들만 모인 곳인가?<br/>아니면 넘어지고, 연약하고, 흔들리는 사람들에게도 열려 있는 곳인가?"</p>
+              <p class="src">주일 말씀 중에서</p>
+            </div>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>묵상</span>
+            <p class="key-line">교회는, 넘어진 사람도 <span class="em">다시 안아주는 곳</span>입니다.</p>
+            <p class="gloss">돌아온 사람을 다시 받아들이는 일은 교회가 베푸는 관용이 아니라, 교회가 무엇으로 세워졌는지를 드러내는 자리입니다. 은혜는 언제나 겸손한 자리 쪽으로 흐릅니다.</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>응답</span>
+            <p class="question">
+              <span class="q-mark">?</span>내가 마음에서 밀어내고 있는 사람은 누구입니까? 그도 같은 은혜 안에 있다면, 어떻게 다르게 보일까요?
+            </p>
+            <p class="prayer">— 누군가의 약함을 정죄로 보지 않게 하소서.</p>
+            <p class="respond"><span class="who">다 함께</span>주여, 우리의 기도를 들어주소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. DAY 02 — 짝수: 하단 장식 -->
+      <section class="slide bg-ivory day-even" data-bg="light">
+        <div class="slide-inner liturgy">
+          <div class="build day-head">
+            <p class="rubric">제 이 일 · 화요일</p>
+            <h2 class="day-title">단번에 끝난 용서</h2>
+            <span class="day-meta">둘째 날의 예배</span>
+          </div>
+          <div class="build order-item lection">
+            <span class="order-label"><span class="mark">✦</span>봉독</span>
+            <p class="quote">"우리가 우리 죄를 자백하면, 하나님은 신실하시고 의로우신 분이셔서, 우리 죄를 용서하시고 모든 불의에서 우리를 깨끗하게 해주실 것입니다."</p>
+            <p class="cite">요한일서 1:9</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>말씀</span>
+            <div class="homily">
+              <p class="quote">"넘어진 사람이 돌아왔을 때 다시 세례를 받을 필요는 없습니다.<br/>왜냐하면 죄에 대한 궁극적인 용서는 예수님의 십자가에서 단번에 완성되었기 때문입니다."</p>
+              <p class="src">주일 말씀 중에서</p>
+            </div>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>묵상</span>
+            <p class="key-line">용서받기 위해 <span class="em">다시 무엇을 할 필요가 없습니다.</span></p>
+            <p class="gloss">자백은 용서를 얻어내는 조건이 아니라, 이미 열려 있는 자리로 걸어 들어가는 일입니다. 우리가 할 일은 감추던 것을 그분 앞에 내려놓는 것뿐입니다.</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>응답</span>
+            <p class="question">
+              <span class="q-mark">?</span>오늘 마음에서 자꾸 떠오르는, 자백하고 싶은 한 가지를 정직하게 꺼내 놓으시겠습니까?
+            </p>
+            <p class="prayer">— 십자가에서 이미 다 이루셨음을 믿습니다.</p>
+            <p class="respond"><span class="who">다 함께</span>주여, 우리의 기도를 들어주소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. DAY 03 — 홀수: 상단 장식 -->
+      <section class="slide bg-ivory day-odd" data-bg="light">
+        <div class="slide-inner liturgy">
+          <div class="build day-head">
+            <p class="rubric">제 삼 일 · 수요일</p>
+            <h2 class="day-title">나도 넘어질 수 있다</h2>
+            <span class="day-meta">셋째 날의 예배</span>
+          </div>
+          <div class="build order-item lection">
+            <span class="order-label"><span class="mark">✦</span>봉독</span>
+            <p class="quote">"그러므로 서 있다고 생각하는 사람은 넘어지지 않도록 조심하십시오."</p>
+            <p class="cite">고린도전서 10:12</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>말씀</span>
+            <div class="homily">
+              <p class="quote">"나는 절대 넘어지지 않을 것이라고 생각하는 그 마음 자체가 이미 위험한 것입니다."</p>
+              <p class="src">주일 말씀 중에서</p>
+            </div>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>묵상</span>
+            <p class="key-line">내 강함이 아니라, <span class="em">은혜 위에 서 있는 것</span>입니다.</p>
+            <p class="gloss">서 있다는 확신은 종종 가장 위태로운 자리입니다. 내가 버티고 있다고 여기는 그 자리조차 붙들어 주시는 손 위에 있음을 기억할 때, 우리는 비로소 안전해집니다.</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>응답</span>
+            <p class="question">
+              <span class="q-mark">?</span>내가 "나는 절대 그러지 않을 거야"라고 말하는 영역은 어디입니까? 그 자리도 은혜임을 인정하면 무엇이 달라집니까?
+            </p>
+            <p class="prayer">— 제가 서 있는 자리도 은혜임을 알게 하소서.</p>
+            <p class="respond"><span class="who">다 함께</span>주여, 우리의 기도를 들어주소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. DAY 04 — 짝수: 하단 장식 -->
+      <section class="slide bg-ivory day-even" data-bg="light">
+        <div class="slide-inner liturgy">
+          <div class="build day-head">
+            <p class="rubric">제 사 일 · 목요일</p>
+            <h2 class="day-title">그분의 신실함</h2>
+            <span class="day-meta">넷째 날의 예배</span>
+          </div>
+          <div class="build order-item lection">
+            <span class="order-label"><span class="mark">✦</span>봉독</span>
+            <p class="quote">"우리는 신실하지 못하더라도, 그분은 언제나 신실하십니다. 그분은 자기를 부인할 수 없으시기 때문입니다."</p>
+            <p class="cite">디모데후서 2:13</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>말씀</span>
+            <div class="homily">
+              <p class="quote">"우리가 떠나 있을 때에도 주님은 기다리고 계십니다.<br/>우리의 신실함이 끊어져도, 그분의 신실함은 끊어지지 않습니다."</p>
+              <p class="src">주일 말씀 중에서</p>
+            </div>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>묵상</span>
+            <p class="key-line">내가 떠나 있을 때에도 <span class="em">주님은 기다리고 계셨습니다.</span></p>
+            <p class="gloss">우리의 믿음은 오르내리지만, 그 믿음을 받아 주시는 분은 흔들리지 않으십니다. 돌아갈 곳이 있다는 말은 그분이 그 자리를 지키고 계신다는 뜻입니다.</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>응답</span>
+            <p class="question">
+              <span class="q-mark">?</span>한때 믿음에서 멀어졌던 시간이 있다면, 거기서도 주님이 어떻게 기다리고 계셨나요?
+            </p>
+            <p class="prayer">— 흔들려도 돌아갈 곳이 당신임을 잊지 않게 하소서.</p>
+            <p class="respond"><span class="who">다 함께</span>주여, 우리의 기도를 들어주소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. DAY 05 — 홀수: 상단 장식 -->
+      <section class="slide bg-ivory day-odd" data-bg="light">
+        <div class="slide-inner liturgy">
+          <div class="build day-head">
+            <p class="rubric">제 오 일 · 금요일</p>
+            <h2 class="day-title">같은 은혜 위에</h2>
+            <span class="day-meta">다섯째 날의 예배</span>
+          </div>
+          <div class="build order-item lection">
+            <span class="order-label"><span class="mark">✦</span>봉독</span>
+            <p class="quote">"모든 사람이 죄를 범하였습니다. … 그리스도 예수 안에서 얻는 구원으로 말미암아, 하나님의 은혜로 값없이 의롭다는 선고를 받습니다."</p>
+            <p class="cite">로마서 3:23-24</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>말씀</span>
+            <div class="homily">
+              <p class="quote">"영적으로 강한 사람이든 약한 사람이든, 오래 믿은 사람이든 방금 돌아온 사람이든,<br/>모두가 같은 은혜 위에 서 있습니다."</p>
+              <p class="src">주일 말씀 중에서</p>
+            </div>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>묵상</span>
+            <p class="key-line">강한 사람도 약한 사람도, <span class="em">모두 같은 은혜 위에</span> 서 있습니다.</p>
+            <p class="gloss">받은 자리가 같다면 서로를 재는 저울은 사라집니다. 한 주의 마지막 날, 우리는 같은 값으로 부름받은 사람들로 나란히 섭니다.</p>
+          </div>
+          <div class="build order-item">
+            <span class="order-label"><span class="mark">✦</span>응답</span>
+            <p class="question">
+              <span class="q-mark">?</span>이번 한 주, 내가 따뜻하게 품을 한 사람은 누구입니까?
+            </p>
+            <p class="prayer">— 같은 은혜 위에 선 가족임을 잊지 않게 하소서.</p>
+            <p class="respond"><span class="who">다 함께</span>주여, 우리의 기도를 들어주소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. 한 주의 응답 — 네이비 · 골드 타이포 -->
+      <section class="slide bg-navy" data-bg="dark">
+        <div class="slide-inner">
+          <div class="build">
+            <p class="rubric-lg">한 주의 응답</p>
+            <div class="hair"></div>
+          </div>
+          <div class="build">
+            <p class="three-words">
+              <span class="word">겸손</span>
+              <span class="dot">✦</span>
+              <span class="word">담대</span>
+              <span class="dot">✦</span>
+              <span class="word">따뜻</span>
+            </p>
+          </div>
+          <div class="build">
+            <p class="closing-line">
+              "죄를 용서받는 것"이 우리에게 요구하는 세 자세.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9. 축도 — 네이비 -->
+      <section class="slide bg-navy-deep" data-bg="dark">
+        <div class="slide-inner" style="max-width: 860px;">
+          <div class="build">
+            <p class="rubric-lg">축도</p>
+            <div class="hair"></div>
+          </div>
+          <div class="build homily" style="margin-bottom: clamp(20px, 2.8vh, 34px);">
+            <p class="quote">"겸손하게, 나도 넘어질 수 있는 존재임을 알고. 담대하게, 넘어져도 돌아갈 곳이 있음을 알고.<br/>따뜻하게, 돌아오는 자를 품는 공동체의 일원으로 살아가시기를 바랍니다."</p>
+            <p class="src">주일 말씀 중에서</p>
+          </div>
+          <div class="build">
+            <p class="closing-prayer">
+              예수님,<br/>
+              같은 은혜 위에 선 가족임을 잊지 않게 하소서.<br/>
+              <span class="em">겸손하게, 담대하게, 따뜻하게</span> 살아가게 하소서.
+            </p>
+          </div>
+          <div class="build">
+            <p class="amen">— 아 멘 .</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const deck = document.getElementById("deck");
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const total = slides.length;
+  const curEl = document.getElementById("curIdx");
+  const totEl = document.getElementById("totIdx");
+  totEl.textContent = total;
+  let cur = 0;
+  function applyMode() {
+    const isDark = (slides[cur].dataset.bg || "light") === "dark";
+    deck.classList.toggle("dark-mode", isDark);
+  }
+  function snapPositions(activeIdx) {
+    slides.forEach((s, i) => {
+      s.classList.remove("is-current", "is-prev", "is-next", "is-animating");
+      if (i === activeIdx) s.classList.add("is-current");
+      else if (i < activeIdx) s.classList.add("is-prev");
+      else s.classList.add("is-next");
+    });
+  }
+  function go(idx, push = true) {
+    idx = Math.max(0, Math.min(total - 1, idx));
+    if (idx === cur && slides[cur].classList.contains("is-current")) return;
+    const dir = idx >= cur ? "fwd" : "back";
+    const oldCur = cur;
+    slides.forEach((s, i) => {
+      if (i === oldCur || i === idx) return;
+      s.classList.remove("is-current", "is-prev", "is-next", "is-animating");
+      if (i < idx) s.classList.add("is-prev");
+      else s.classList.add("is-next");
+    });
+    const out = slides[oldCur], inc = slides[idx];
+    out.classList.add("is-animating"); inc.classList.add("is-animating");
+    requestAnimationFrame(() => {
+      out.classList.remove("is-current");
+      out.classList.add(dir === "fwd" ? "is-prev" : "is-next");
+      inc.classList.remove("is-prev", "is-next");
+      inc.classList.add("is-current");
+    });
+    cur = idx;
+    curEl.textContent = cur + 1;
+    applyMode();
+    if (push) history.replaceState(null, "", `#${cur + 1}`);
+  }
+  const initialHash = parseInt(location.hash.replace("#", ""), 10);
+  const startIdx = Number.isFinite(initialHash) && initialHash >= 1 ? Math.min(initialHash - 1, total - 1) : 0;
+  cur = startIdx;
+  snapPositions(startIdx);
+  curEl.textContent = cur + 1;
+  applyMode();
+  function next() { go(cur + 1); }
+  function prev() { go(cur - 1); }
+  document.addEventListener("keydown", (e) => {
+    switch (e.key) {
+      case "ArrowRight": case " ": case "PageDown": e.preventDefault(); next(); break;
+      case "ArrowLeft": case "PageUp": e.preventDefault(); prev(); break;
+      case "Home": e.preventDefault(); go(0); break;
+      case "End": e.preventDefault(); go(total - 1); break;
+      case "f": case "F":
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+        break;
+    }
+  });
+  document.getElementById("navLeft").addEventListener("click", prev);
+  document.getElementById("navRight").addEventListener("click", next);
+
+  // 표지 목차에서 해당 day 페이지로 점프 (슬라이드 인덱스 2~6)
+  document.querySelectorAll("[data-goto]").forEach(tile => {
+    const handler = (e) => {
+      e.preventDefault();
+      go(parseInt(tile.dataset.goto, 10));
+    };
+    tile.addEventListener("click", handler);
+    tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") handler(e);
+    });
+  });
+  let tx = null;
+  deck.addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; }, { passive: true });
+  deck.addEventListener("touchend", (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 60) (dx < 0 ? next : prev)();
+    tx = null;
+  });
+</script>
+</body>
+</html>

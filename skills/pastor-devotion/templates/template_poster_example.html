@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>5일 묵상 시안3 — 넘어져도, 돌아갈 곳 (사도신경 강해 18)</title>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/suit@3.0.1/dist/suit.css">
+<style>
+  :root {
+    --primary: #cc785c;
+    --primary-deep: #a85a40;
+    --canvas: #faf9f5;
+    --tint-1: #f4ebe0;   /* day 1 — blush warm */
+    --tint-2: #ede5d8;   /* day 2 — sand light */
+    --tint-3: #221f1c;   /* day 3 — deep ink */
+    --tint-4: #f6ede1;   /* day 4 — cream gold */
+    --tint-5: #e8ddc9;   /* day 5 — wheat */
+    --dark: #181715;
+    --ink: #141413;
+    --body: #3d3d3a;
+    --muted: #6c6a64;
+    --on-dark: #faf9f5;
+    --on-dark-soft: #b3afa5;
+    --on-dark-deep: #d4ccb8;
+    --hairline: #d8cebf;
+    --font-display: "Nanum Myeongjo", "NanumMyeongjo", "Noto Serif KR", Georgia, serif;
+    --font-sans: "SUIT", "SUIT Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: var(--font-sans); background: #1a1a1a; -webkit-font-smoothing: antialiased; }
+  .num-mega, .display-2xl, .display-xl, .display-md, .key-line, .scripture .quote,
+  .scripture .cite, .question, .prayer, .corner, .day-card .num, .day-card .ttl,
+  .badge, .three-words .word, .three-words .dot, .closing-line,
+  .sermon-cut .cut-label, .sermon-cut .cut-text {
+    word-break: keep-all; overflow-wrap: break-word;
+  }
+
+  .stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .deck {
+    position: relative; aspect-ratio: 16 / 9;
+    width: 100vw; height: auto; max-height: 100vh;
+    background: var(--canvas); overflow: hidden;
+  }
+  @supports not (aspect-ratio: 16 / 9) { .deck { width: 100vw; height: 56.25vw; } }
+
+  .reel { position: relative; width: 100%; height: 100%; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; align-items: center;
+    padding: clamp(36px, 5vh, 70px) clamp(48px, 6.5vw, 110px);
+    opacity: 0; pointer-events: none;
+    transform: translateX(100%);
+    overflow: auto;
+  }
+  .slide.is-animating { transition: transform 0.6s cubic-bezier(.65,0,.2,1), opacity 0.5s ease; }
+  .slide.is-current { opacity: 1; pointer-events: auto; transform: translateX(0); z-index: 2; }
+  .slide.is-prev { transform: translateX(-100%); opacity: 1; }
+  .slide.is-next { transform: translateX(100%); opacity: 1; }
+
+  .bg-canvas { background: var(--canvas); color: var(--ink); }
+  .bg-tint-1 { background: var(--tint-1); color: var(--ink); }
+  .bg-tint-2 { background: var(--tint-2); color: var(--ink); }
+  .bg-tint-3 { background: var(--tint-3); color: var(--on-dark); }
+  .bg-tint-4 { background: var(--tint-4); color: var(--ink); }
+  .bg-tint-5 { background: var(--tint-5); color: var(--ink); }
+  .bg-dark { background: var(--dark); color: var(--on-dark); }
+
+  .slide-inner { width: 100%; max-width: 1240px; margin: 0 auto; }
+
+  /* Top accent bar (signature element) */
+  .accent-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 5px; background: var(--primary);
+    z-index: 4;
+  }
+  .bg-tint-3 .accent-bar { background: var(--primary); opacity: 0.85; }
+
+  /* Cover */
+  .cover {
+    display: grid; grid-template-rows: auto 1fr auto; gap: 24px;
+    width: 100%; height: 100%;
+  }
+  .cover-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .cover-mid { display: flex; flex-direction: column; justify-content: center; }
+  .cover-bot { display: flex; justify-content: space-between; align-items: flex-end; }
+
+  /* Poster layout — single full-bleed per day */
+  .poster {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.5fr) 1fr;
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "num   meta"
+      "num   key"
+      "serm  serm"
+      "scrip foot";
+    gap: clamp(18px, 2.1vw, 32px);
+    width: 100%; height: auto;
+    align-items: start;
+  }
+  .poster .num-mega {
+    grid-area: num;
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(140px, 18vw, 280px);
+    line-height: 0.85; letter-spacing: -0.045em;
+    color: var(--primary);
+    margin-top: -10px;
+  }
+  .bg-tint-3 .poster .num-mega { color: var(--primary); }
+  .poster .meta {
+    grid-area: meta;
+    display: flex; align-items: baseline; gap: 16px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 18px;
+  }
+  .bg-tint-3 .poster .meta { border-bottom-color: rgba(255,255,255,0.18); }
+  .poster .key-block { grid-area: key; display: flex; flex-direction: column; justify-content: center; }
+  .poster .scrip-block {
+    grid-area: scrip;
+    border-left: 4px solid var(--primary);
+    padding-left: 18px; padding-top: 4px;
+    align-self: end;
+  }
+  .poster .foot { grid-area: foot; align-self: end; }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(13px, 1.1vw, 16px); letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 4px 10px; border: 1px solid var(--hairline); border-radius: 999px;
+  }
+  .bg-tint-3 .badge { color: var(--on-dark-soft); border-color: rgba(255,255,255,0.18); }
+  .badge.solid { background: var(--primary); color: var(--canvas); border-color: transparent; }
+
+  .key-line {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(36px, 4.6vw, 68px);
+    line-height: 1.18; letter-spacing: -0.024em;
+    color: var(--ink);
+  }
+  .bg-tint-3 .key-line { color: var(--on-dark); }
+
+  .scripture .quote {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(16px, 1.55vw, 21px);
+    line-height: 1.55; color: var(--body);
+    font-style: normal;
+  }
+  .bg-tint-3 .scripture .quote { color: var(--on-dark-deep); }
+  .scripture .cite {
+    margin-top: 8px;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(12px, 1.1vw, 15px); letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--primary);
+  }
+
+  /* 설교 발췌 — 성경(봉독)과 달리 목사님 육성. 틴트 위에 얹힌 다른 표면. */
+  .poster .sermon-cut { grid-area: serm; }
+  .sermon-cut {
+    text-align: left;
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(204, 120, 92, 0.2);
+    border-left: 3px solid var(--primary);
+    border-radius: 4px;
+    padding: clamp(11px, 1.15vw, 15px) clamp(14px, 1.4vw, 20px);
+  }
+  .sermon-cut .cut-label {
+    display: block;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(11px, 0.92vw, 13px); letter-spacing: 0.13em;
+    color: var(--primary);
+    margin-bottom: 7px;
+  }
+  .sermon-cut .cut-text {
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(14px, 1.18vw, 16px);
+    line-height: 1.6; letter-spacing: -0.004em;
+    color: var(--body);
+  }
+  .bg-tint-3 .sermon-cut, .bg-dark .sermon-cut {
+    background: rgba(255, 255, 255, 0.055);
+    border-color: rgba(255, 255, 255, 0.1);
+    border-left-color: var(--primary);
+  }
+  .bg-tint-3 .sermon-cut .cut-text, .bg-dark .sermon-cut .cut-text { color: var(--on-dark-deep); }
+
+  .question {
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(16px, 1.5vw, 20px);
+    line-height: 1.55;
+    color: var(--body);
+    border-top: 1px solid var(--hairline);
+    padding-top: 14px;
+    display: grid; grid-template-columns: auto 1fr; gap: 14px;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .bg-tint-3 .question { color: var(--on-dark-deep); border-top-color: rgba(255,255,255,0.18); }
+  .question .q-mark {
+    font-family: var(--font-display); font-weight: 800;
+    color: var(--primary); font-size: 1.25em;
+  }
+  .prayer {
+    font-family: var(--font-display); font-weight: 700; font-style: italic;
+    font-size: clamp(15px, 1.4vw, 19px);
+    line-height: 1.55; color: var(--primary-deep);
+  }
+  .bg-tint-3 .prayer { color: #e8b09a; }
+
+  /* Cover-specific type */
+  .display-2xl {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(60px, 8vw, 124px);
+    line-height: 1.0; letter-spacing: -0.032em;
+  }
+  .display-xl {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(44px, 5.8vw, 78px);
+    line-height: 1.08; letter-spacing: -0.024em;
+  }
+  .display-md {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(28px, 3.2vw, 44px);
+    line-height: 1.22; letter-spacing: -0.018em;
+  }
+
+  /* Day cards on cover */
+  .day-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; border-top: 1px solid var(--hairline); }
+  .day-card {
+    padding: 18px 16px 8px;
+    border-right: 1px solid var(--hairline);
+    cursor: pointer;
+    transition: background 0.18s ease;
+  }
+  .day-card:last-child { border-right: none; }
+  .day-card:hover { background: rgba(204,120,92,0.06); }
+  .day-card:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+  .day-card .num {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 32px; color: var(--primary);
+    line-height: 1; margin-bottom: 8px;
+  }
+  .day-card .ttl {
+    font-family: var(--font-sans); font-weight: 600;
+    font-size: 14px; color: var(--ink);
+    line-height: 1.35; letter-spacing: -0.005em;
+  }
+  .day-card .scrip {
+    margin-top: 6px;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+
+  /* Three words slide */
+  .three-words {
+    display: flex; align-items: center; justify-content: center;
+    gap: clamp(20px, 4vw, 64px);
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(54px, 8vw, 116px);
+    line-height: 1.0; letter-spacing: -0.025em;
+    color: var(--ink);
+  }
+  .three-words .word { display: inline-block; }
+  .three-words .dot { color: var(--primary); font-size: 0.5em; transform: translateY(-0.32em); }
+  .closing-line {
+    margin-top: 24px;
+    text-align: center;
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(17px, 1.7vw, 22px);
+    color: var(--muted); letter-spacing: 0.02em;
+  }
+
+  /* Closing slide */
+  .closing-prayer {
+    font-family: var(--font-display); font-weight: 700; font-style: italic;
+    font-size: clamp(24px, 2.7vw, 36px); line-height: 1.5;
+    color: var(--on-dark);
+  }
+
+  .corner {
+    position: absolute; bottom: 22px; z-index: 5;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); pointer-events: none;
+  }
+  .deck.dark-mode .corner { color: var(--on-dark-soft); }
+  .corner.left { left: clamp(36px, 5vw, 80px); }
+  .corner.right { right: clamp(36px, 5vw, 80px); font-variant-numeric: tabular-nums; }
+
+  .nav-zone { position: absolute; top: 0; bottom: 0; width: 18%; z-index: 30; cursor: pointer; }
+  .nav-zone.left { left: 0; }
+  .nav-zone.right { right: 0; }
+  .nav-zone .arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 8px;
+    background: rgba(20,20,19,0.06); color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; opacity: 0; transition: opacity 0.25s;
+  }
+  .nav-zone.left .arrow { left: 16px; }
+  .nav-zone.right .arrow { right: 16px; }
+  .nav-zone:hover .arrow { opacity: 1; }
+  .deck.dark-mode .nav-zone .arrow { background: rgba(255,255,255,0.12); color: var(--on-dark); }
+
+  .build { opacity: 0; transform: translateY(14px); transition: opacity 0.55s ease, transform 0.55s cubic-bezier(.2,.7,.3,1); }
+  .slide.is-current .build { opacity: 1; transform: translateY(0); }
+  .slide.is-current .build:nth-of-type(1) { transition-delay: 0.05s; }
+  .slide.is-current .build:nth-of-type(2) { transition-delay: 0.18s; }
+  .slide.is-current .build:nth-of-type(3) { transition-delay: 0.32s; }
+  .slide.is-current .build:nth-of-type(4) { transition-delay: 0.46s; }
+  .slide.is-current .build:nth-of-type(5) { transition-delay: 0.6s; }
+
+  @media (max-width: 833px) {
+    .stage { background: var(--canvas); }
+    .deck { aspect-ratio: auto; width: 100vw; height: 100dvh; max-height: 100dvh; }
+    @supports not (height: 100dvh) { .deck { height: 100vh; max-height: 100vh; } }
+    .slide {
+      padding: 56px 22px calc(72px + env(safe-area-inset-bottom));
+      align-items: flex-start;
+    }
+
+    .poster {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto auto auto auto;
+      grid-template-areas: "num" "meta" "key" "serm" "scrip" "foot";
+      gap: 18px;
+    }
+    .poster .num-mega { font-size: clamp(88px, 27vw, 136px); margin-top: 0; line-height: 0.88; }
+    .key-line { font-size: clamp(26px, 6.4vw, 36px); }
+
+    .day-strip { grid-template-columns: 1fr; border-top: none; }
+    .day-card {
+      border-right: none; border-top: 1px solid var(--hairline);
+      padding: 14px 4px 12px;
+      display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px;
+    }
+    .day-card:first-child { border-top: 1px solid var(--hairline); }
+    .day-card .num { font-size: 24px; margin-bottom: 0; }
+    .day-card .ttl { font-size: 14px; }
+    .day-card .scrip { margin-top: 0; font-size: 10px; }
+
+    .display-2xl { font-size: clamp(46px, 12vw, 64px); }
+    .display-xl { font-size: clamp(34px, 9vw, 48px); }
+    .display-md { font-size: clamp(22px, 6vw, 28px); }
+    .scripture .quote { font-size: clamp(15px, 3.8vw, 18px); }
+    .scripture .cite { font-size: clamp(11px, 2.8vw, 13px); }
+    .sermon-cut { padding: 11px 13px; }
+    .sermon-cut .cut-label { font-size: clamp(10px, 2.7vw, 12px); letter-spacing: 0.1em; margin-bottom: 6px; }
+    .sermon-cut .cut-text { font-size: clamp(13px, 3.4vw, 15px); line-height: 1.55; }
+    .question { font-size: clamp(15px, 3.9vw, 18px); }
+    .prayer { font-size: clamp(15px, 3.8vw, 17px); }
+
+    .three-words { flex-direction: column; gap: 12px; font-size: clamp(40px, 12vw, 60px); }
+    .three-words .dot { display: none; }
+    .closing-prayer { font-size: clamp(20px, 5vw, 24px); }
+
+    .corner { font-size: 11px; bottom: calc(20px + env(safe-area-inset-bottom)); letter-spacing: 0.06em; }
+    .corner.left { left: 16px; max-width: 60%; }
+    .corner.right { right: 16px; }
+
+    .nav-zone { width: 14%; }
+    .nav-zone .arrow { width: 36px; height: 36px; font-size: 16px; }
+  }
+  @media (max-width: 833px) and (orientation: landscape) {
+    .slide { padding: 24px 32px 40px; }
+    .poster { grid-template-columns: minmax(150px, 0.5fr) 1fr; grid-template-areas: "num meta" "num key" "serm serm" "scrip foot"; }
+    .poster .num-mega { font-size: clamp(90px, 20vw, 140px); }
+    .three-words { flex-direction: row; gap: 24px; font-size: clamp(44px, 10vw, 72px); }
+    .three-words .dot { display: inline; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="deck" id="deck">
+    <div class="corner left">넘어져도, 돌아갈 곳 · 5일 묵상</div>
+    <div class="corner right"><span id="curIdx">1</span> / <span id="totIdx">8</span></div>
+    <div class="nav-zone left" id="navLeft"><div class="arrow">←</div></div>
+    <div class="nav-zone right" id="navRight"><div class="arrow">→</div></div>
+
+    <div class="reel" id="reel">
+
+      <!-- 1. COVER -->
+      <section class="slide bg-canvas" data-bg="light">
+        <div class="accent-bar"></div>
+        <div class="slide-inner cover">
+          <div class="cover-top build">
+            <span class="badge">사도신경 강해 18</span>
+            <span class="badge">5일 묵상</span>
+          </div>
+          <div class="cover-mid">
+            <h1 class="display-2xl build">넘어져도,<br/>돌아갈 곳이<br/>있습니다.</h1>
+            <p class="build" style="margin-top: 28px; font-family: var(--font-sans); font-weight: 500; font-size: clamp(18px, 1.7vw, 22px); color: var(--muted); max-width: 680px; line-height: 1.55;">
+              "죄를 용서받는 것을 믿습니다." — 박해 후 돌아온 사람들의 자리에서 태어난 한 줄. 우리도 그 자리에서 한 주를 함께 살아갑니다.
+            </p>
+          </div>
+          <div class="day-strip build">
+            <div class="day-card" data-goto="1" role="button" tabindex="0">
+              <span class="num">01</span>
+              <span class="ttl">돌아온 사람들.</span>
+              <span class="scrip">약 4:6</span>
+            </div>
+            <div class="day-card" data-goto="2" role="button" tabindex="0">
+              <span class="num">02</span>
+              <span class="ttl">단번에 끝난 용서.</span>
+              <span class="scrip">요일 1:9</span>
+            </div>
+            <div class="day-card" data-goto="3" role="button" tabindex="0">
+              <span class="num">03</span>
+              <span class="ttl">나도 넘어질 수 있다.</span>
+              <span class="scrip">고전 10:12</span>
+            </div>
+            <div class="day-card" data-goto="4" role="button" tabindex="0">
+              <span class="num">04</span>
+              <span class="ttl">그분의 신실함.</span>
+              <span class="scrip">딤후 2:13</span>
+            </div>
+            <div class="day-card" data-goto="5" role="button" tabindex="0">
+              <span class="num">05</span>
+              <span class="ttl">같은 은혜 위에.</span>
+              <span class="scrip">롬 3:23-24</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. DAY 01 — tint-1 (blush warm) -->
+      <section class="slide bg-tint-1" data-bg="light">
+        <div class="accent-bar"></div>
+        <div class="slide-inner poster">
+          <div class="num-mega build">01</div>
+          <div class="meta build">
+            <span class="badge solid">DAY 01</span>
+            <span class="badge">돌아온 사람들</span>
+            <span style="font-family: var(--font-sans); font-size: clamp(13px, 1.2vw, 16px); color: var(--muted); margin-left: auto;">월요일 묵상</span>
+          </div>
+          <div class="key-block">
+            <p class="key-line build">
+              교회는, 넘어진 사람도<br/>
+              <span style="color: var(--primary);">다시 안아주는 곳</span>입니다.
+            </p>
+          </div>
+          <div class="sermon-cut build">
+            <span class="cut-label">주일 말씀 중에서</span>
+            <p class="cut-text">교회는 도대체 어떤 곳인가? 한 번도 넘어진 적 없는 사람들만 모인 곳인가? 아니면 넘어지고, 연약하고, 흔들리는 사람들에게도 열려 있는 곳인가?</p>
+          </div>
+          <div class="scrip-block scripture build">
+            <p class="quote">"하나님께서는 교만한 자들을 물리치시고, 겸손한 사람들에게 은혜를 주신다."</p>
+            <p class="cite">야고보서 4:6</p>
+          </div>
+          <div class="foot build" style="display: flex; flex-direction: column; gap: 14px;">
+            <p class="question">
+              <span class="q-mark">?</span>
+              <span>내가 마음에서 밀어내고 있는 사람은 누구입니까? 그도 같은 은혜 안에 있다면, 어떻게 다르게 보일까요?</span>
+            </p>
+            <p class="prayer">— 누군가의 약함을 정죄로 보지 않게 하소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. DAY 02 — tint-2 (sand light) -->
+      <section class="slide bg-tint-2" data-bg="light">
+        <div class="accent-bar"></div>
+        <div class="slide-inner poster">
+          <div class="num-mega build">02</div>
+          <div class="meta build">
+            <span class="badge solid">DAY 02</span>
+            <span class="badge">단번에 끝난 용서</span>
+            <span style="font-family: var(--font-sans); font-size: clamp(13px, 1.2vw, 16px); color: var(--muted); margin-left: auto;">화요일 묵상</span>
+          </div>
+          <div class="key-block">
+            <p class="key-line build">
+              용서받기 위해<br/>
+              <span style="color: var(--primary);">다시 무엇을 할 필요가 없습니다.</span>
+            </p>
+          </div>
+          <div class="sermon-cut build">
+            <span class="cut-label">주일 말씀 중에서</span>
+            <p class="cut-text">넘어진 사람이 돌아왔을 때 다시 세례를 받을 필요는 없습니다. 왜냐하면 죄에 대한 궁극적인 용서는 예수님의 십자가에서 단번에 완성되었기 때문입니다.</p>
+          </div>
+          <div class="scrip-block scripture build">
+            <p class="quote">"우리가 우리 죄를 자백하면, 하나님은 신실하시고 의로우신 분이셔서, 우리 죄를 용서하시고 모든 불의에서 우리를 깨끗하게 해주실 것입니다."</p>
+            <p class="cite">요한일서 1:9</p>
+          </div>
+          <div class="foot build" style="display: flex; flex-direction: column; gap: 14px;">
+            <p class="question">
+              <span class="q-mark">?</span>
+              <span>오늘 마음에서 자꾸 떠오르는, 자백하고 싶은 한 가지를 정직하게 꺼내 놓으시겠습니까?</span>
+            </p>
+            <p class="prayer">— 십자가에서 이미 다 이루셨음을 믿습니다.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. DAY 03 — tint-3 (deep ink, dark) -->
+      <section class="slide bg-tint-3" data-bg="dark">
+        <div class="accent-bar"></div>
+        <div class="slide-inner poster">
+          <div class="num-mega build">03</div>
+          <div class="meta build">
+            <span class="badge solid">DAY 03</span>
+            <span class="badge">겸손</span>
+            <span style="font-family: var(--font-sans); font-size: clamp(13px, 1.2vw, 16px); color: var(--on-dark-soft); margin-left: auto;">수요일 묵상</span>
+          </div>
+          <div class="key-block">
+            <p class="key-line build">
+              내 강함이 아니라,<br/>
+              <span style="color: var(--primary);">은혜 위에 서 있는 것</span>입니다.
+            </p>
+          </div>
+          <div class="sermon-cut build">
+            <span class="cut-label">주일 말씀 중에서</span>
+            <p class="cut-text">나는 절대 넘어지지 않을 것이라고 생각하는 그 마음 자체가 이미 위험한 것입니다.</p>
+          </div>
+          <div class="scrip-block scripture build">
+            <p class="quote">"그러므로 서 있다고 생각하는 사람은 넘어지지 않도록 조심하십시오."</p>
+            <p class="cite">고린도전서 10:12</p>
+          </div>
+          <div class="foot build" style="display: flex; flex-direction: column; gap: 14px;">
+            <p class="question">
+              <span class="q-mark">?</span>
+              <span>내가 "나는 절대 그러지 않을 거야"라고 말하는 영역은 어디입니까? 그 자리도 은혜임을 인정하면 무엇이 달라집니까?</span>
+            </p>
+            <p class="prayer">— 제가 서 있는 자리도 은혜임을 알게 하소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. DAY 04 — tint-4 (cream gold) -->
+      <section class="slide bg-tint-4" data-bg="light">
+        <div class="accent-bar"></div>
+        <div class="slide-inner poster">
+          <div class="num-mega build">04</div>
+          <div class="meta build">
+            <span class="badge solid">DAY 04</span>
+            <span class="badge">그분의 신실함</span>
+            <span style="font-family: var(--font-sans); font-size: clamp(13px, 1.2vw, 16px); color: var(--muted); margin-left: auto;">목요일 묵상</span>
+          </div>
+          <div class="key-block">
+            <p class="key-line build">
+              내가 떠나 있을 때에도<br/>
+              <span style="color: var(--primary);">주님은 기다리고 계셨습니다.</span>
+            </p>
+          </div>
+          <div class="sermon-cut build">
+            <span class="cut-label">주일 말씀 중에서</span>
+            <p class="cut-text">우리가 떠나 있을 때에도 주님은 기다리고 계십니다. 우리의 신실함이 끊어져도, 그분의 신실함은 끊어지지 않습니다.</p>
+          </div>
+          <div class="scrip-block scripture build">
+            <p class="quote">"우리는 신실하지 못하더라도, 그분은 언제나 신실하십니다. 그분은 자기를 부인할 수 없으시기 때문입니다."</p>
+            <p class="cite">디모데후서 2:13</p>
+          </div>
+          <div class="foot build" style="display: flex; flex-direction: column; gap: 14px;">
+            <p class="question">
+              <span class="q-mark">?</span>
+              <span>한때 믿음에서 멀어졌던 시간이 있다면, 거기서도 주님이 어떻게 기다리고 계셨나요?</span>
+            </p>
+            <p class="prayer">— 흔들려도 돌아갈 곳이 당신임을 잊지 않게 하소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. DAY 05 — tint-5 (wheat) -->
+      <section class="slide bg-tint-5" data-bg="light">
+        <div class="accent-bar"></div>
+        <div class="slide-inner poster">
+          <div class="num-mega build">05</div>
+          <div class="meta build">
+            <span class="badge solid">DAY 05</span>
+            <span class="badge">같은 은혜 위에</span>
+            <span style="font-family: var(--font-sans); font-size: clamp(13px, 1.2vw, 16px); color: var(--muted); margin-left: auto;">금요일 묵상</span>
+          </div>
+          <div class="key-block">
+            <p class="key-line build">
+              강한 사람도 약한 사람도,<br/>
+              <span style="color: var(--primary);">모두 같은 은혜 위에</span> 서 있습니다.
+            </p>
+          </div>
+          <div class="sermon-cut build">
+            <span class="cut-label">주일 말씀 중에서</span>
+            <p class="cut-text">영적으로 강한 사람이든 약한 사람이든, 오래 믿은 사람이든 방금 돌아온 사람이든, 모두가 같은 은혜 위에 서 있습니다.</p>
+          </div>
+          <div class="scrip-block scripture build">
+            <p class="quote">"모든 사람이 죄를 범하였습니다. … 그리스도 예수 안에서 얻는 구원으로 말미암아, 하나님의 은혜로 값없이 의롭다는 선고를 받습니다."</p>
+            <p class="cite">로마서 3:23-24</p>
+          </div>
+          <div class="foot build" style="display: flex; flex-direction: column; gap: 14px;">
+            <p class="question">
+              <span class="q-mark">?</span>
+              <span>이번 한 주, 내가 따뜻하게 품을 한 사람은 누구입니까?</span>
+            </p>
+            <p class="prayer">— 같은 은혜 위에 선 가족임을 잊지 않게 하소서.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. THREE WORDS -->
+      <section class="slide bg-canvas" data-bg="light">
+        <div class="accent-bar"></div>
+        <div class="slide-inner" style="text-align: center;">
+          <p class="badge build" style="margin-bottom: 36px;">한 주의 결론</p>
+          <p class="three-words build">
+            <span class="word">겸손</span>
+            <span class="dot">·</span>
+            <span class="word">담대</span>
+            <span class="dot">·</span>
+            <span class="word">따뜻</span>
+          </p>
+          <p class="closing-line build">
+            "죄를 용서받는 것"이 우리에게 요구하는 세 자세.
+          </p>
+        </div>
+      </section>
+
+      <!-- 8. CLOSING PRAYER (dark) -->
+      <section class="slide bg-dark" data-bg="dark">
+        <div class="accent-bar"></div>
+        <div class="slide-inner" style="text-align: center; max-width: 880px;">
+          <p class="badge build" style="margin-bottom: 28px;">마지막 기도</p>
+          <div class="sermon-cut build" style="max-width: 680px; margin: 0 auto 30px;">
+            <span class="cut-label">주일 말씀 중에서</span>
+            <p class="cut-text">겸손하게, 나도 넘어질 수 있는 존재임을 알고. 담대하게, 넘어져도 돌아갈 곳이 있음을 알고. 따뜻하게, 돌아오는 자를 품는 공동체의 일원으로 살아가시기를 바랍니다.</p>
+          </div>
+          <p class="closing-prayer build">
+            예수님,<br/>
+            같은 은혜 위에 선 가족임을 잊지 않게 하소서.<br/>
+            <span style="color: var(--primary);">겸손하게, 담대하게, 따뜻하게</span> 살아가게 하소서.
+          </p>
+          <p class="build" style="margin-top: 36px; font-family: var(--font-sans); font-weight: 700; font-size: clamp(14px, 1.2vw, 17px); letter-spacing: 0.18em; color: var(--on-dark-soft);">
+            — 아 멘 .
+          </p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const deck = document.getElementById("deck");
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const total = slides.length;
+  const curEl = document.getElementById("curIdx");
+  const totEl = document.getElementById("totIdx");
+  totEl.textContent = total;
+  let cur = 0;
+  function applyMode() {
+    const isDark = (slides[cur].dataset.bg || "light") === "dark";
+    deck.classList.toggle("dark-mode", isDark);
+  }
+  function snapPositions(activeIdx) {
+    slides.forEach((s, i) => {
+      s.classList.remove("is-current", "is-prev", "is-next", "is-animating");
+      if (i === activeIdx) s.classList.add("is-current");
+      else if (i < activeIdx) s.classList.add("is-prev");
+      else s.classList.add("is-next");
+    });
+  }
+  function go(idx, push = true) {
+    idx = Math.max(0, Math.min(total - 1, idx));
+    if (idx === cur && slides[cur].classList.contains("is-current")) return;
+    const dir = idx >= cur ? "fwd" : "back";
+    const oldCur = cur;
+    slides.forEach((s, i) => {
+      if (i === oldCur || i === idx) return;
+      s.classList.remove("is-current", "is-prev", "is-next", "is-animating");
+      if (i < idx) s.classList.add("is-prev");
+      else s.classList.add("is-next");
+    });
+    const out = slides[oldCur], inc = slides[idx];
+    out.classList.add("is-animating"); inc.classList.add("is-animating");
+    requestAnimationFrame(() => {
+      out.classList.remove("is-current");
+      out.classList.add(dir === "fwd" ? "is-prev" : "is-next");
+      inc.classList.remove("is-prev", "is-next");
+      inc.classList.add("is-current");
+    });
+    cur = idx;
+    curEl.textContent = cur + 1;
+    applyMode();
+    if (push) history.replaceState(null, "", `#${cur + 1}`);
+  }
+  const initialHash = parseInt(location.hash.replace("#", ""), 10);
+  const startIdx = Number.isFinite(initialHash) && initialHash >= 1 ? Math.min(initialHash - 1, total - 1) : 0;
+  cur = startIdx;
+  snapPositions(startIdx);
+  curEl.textContent = cur + 1;
+  applyMode();
+  function next() { go(cur + 1); }
+  function prev() { go(cur - 1); }
+  document.addEventListener("keydown", (e) => {
+    switch (e.key) {
+      case "ArrowRight": case " ": case "PageDown": e.preventDefault(); next(); break;
+      case "ArrowLeft": case "PageUp": e.preventDefault(); prev(); break;
+      case "Home": e.preventDefault(); go(0); break;
+      case "End": e.preventDefault(); go(total - 1); break;
+      case "f": case "F":
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+        break;
+    }
+  });
+  document.getElementById("navLeft").addEventListener("click", prev);
+  document.getElementById("navRight").addEventListener("click", next);
+
+  // Cover day-card jumps to that day's poster (slide indices 1-5)
+  document.querySelectorAll(".day-card[data-goto]").forEach(tile => {
+    const handler = (e) => {
+      e.preventDefault();
+      go(parseInt(tile.dataset.goto, 10));
+    };
+    tile.addEventListener("click", handler);
+    tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") handler(e);
+    });
+  });
+  let tx = null;
+  deck.addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; }, { passive: true });
+  deck.addEventListener("touchend", (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 60) (dx < 0 ? next : prev)();
+    tx = null;
+  });
+</script>
+</body>
+</html>

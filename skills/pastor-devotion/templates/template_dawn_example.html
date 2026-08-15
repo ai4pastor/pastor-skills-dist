@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>5일 묵상 — 넘어져도, 돌아갈 곳 · 새벽 (사도신경 강해 18)</title>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/suit@3.0.1/dist/suit.css">
+<style>
+  /* ──────────────────────────────────────────────────────────────
+     dawn — 새벽기도 시안
+     팔레트 규율: linear.app DESIGN.md 표면 규율 참조
+       (canvas → surface 한 단계 리프트, 보더는 화이트 저투명 헤어라인,
+        그림자 대신 표면 명도로 위계를 만든다)
+       + dawn 커스텀 그라디언트 (Day1 심야 → Day5 여명 → 해돋이)
+     ────────────────────────────────────────────────────────────── */
+  :root {
+    /* 시간 진행 — Day 1 심야에서 Day 5 여명까지 배경이 밝아진다 */
+    --night:  #0e1220;   /* day 1 — 심야 네이비 (베이스) */
+    --dawn-2: #1a2233;   /* day 2 — 새벽 3시 */
+    --dawn-3: #2a3350;   /* day 3 — 물빛이 도는 하늘 */
+    --dawn-4: #4a4668;   /* day 4 — 여명 보라 */
+    --dawn-5: #7a5b63;   /* day 5 — 지평선이 붉어짐 */
+
+    /* 액센트 */
+    --amber: #e8a04c;        /* 해의 색 — 유일한 주 액센트 */
+    --amber-soft: #f2c489;
+    --amber-deep: #c47f36;
+    --rose: #d98a7a;         /* 여명의 붉은 기운 */
+
+    /* 다크 위 텍스트 */
+    --ivory: #f6f1e7;
+    --muted: #9aa0b0;
+    --ink-warm: #3a2415;     /* 밝은 해돋이 그라디언트 위 텍스트 */
+
+    /* 표면 사다리 (linear 규율: 배경보다 한 단계 밝게, 그림자 없음) */
+    --surface-1: rgba(255,255,255,0.045);
+    --surface-2: rgba(255,255,255,0.085);
+    --hairline: rgba(255,255,255,0.10);
+    --hairline-strong: rgba(255,255,255,0.18);
+
+    --font-display: "Nanum Myeongjo", "NanumMyeongjo", "Noto Serif KR", Georgia, serif;
+    --font-sans: "SUIT", "SUIT Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: var(--font-sans); background: #07090f; -webkit-font-smoothing: antialiased; }
+
+  .display-2xl, .display-md, .key-line, .scripture .quote, .scripture .cite,
+  .question, .prayer, .corner, .day-card .num, .day-card .ttl, .day-card .scrip,
+  .eyebrow, .day-mark .day-ttl, .day-mark .day-when, .card-label, .ref-mini,
+  .sermon-label, .sermon-quote, .lead, .closing-prayer, .amen {
+    word-break: keep-all; overflow-wrap: break-word;
+  }
+
+  .stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .deck {
+    position: relative; aspect-ratio: 16 / 9;
+    width: 100vw; height: auto; max-height: 100vh;
+    background: var(--night); overflow: hidden;
+  }
+  @supports not (aspect-ratio: 16 / 9) { .deck { width: 100vw; height: 56.25vw; } }
+
+  .reel { position: relative; width: 100%; height: 100%; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; align-items: center;
+    padding: clamp(36px, 5vh, 70px) clamp(48px, 6.5vw, 110px);
+    opacity: 0; pointer-events: none;
+    transform: translateX(100%);
+    overflow: auto;
+    color: var(--ivory);
+  }
+  .slide.is-animating { transition: transform 0.6s cubic-bezier(.65,0,.2,1), opacity 0.5s ease; }
+  .slide.is-current { opacity: 1; pointer-events: auto; transform: translateX(0); z-index: 2; }
+  .slide.is-prev { transform: translateX(-100%); opacity: 1; }
+  .slide.is-next { transform: translateX(100%); opacity: 1; }
+
+  /* ── 하루별 하늘 (시그니처: Day가 갈수록 배경이 밝아진다) ── */
+  .sky-cover { background: var(--night); --edge: #2b3550; --glow-a: rgba(232,160,76,0.05); --glow-b: rgba(217,138,122,0.03); --glow-h: 42%; }
+  .sky-1 { background: var(--night);  --edge: #2b3550; --glow-a: rgba(232,160,76,0.06); --glow-b: rgba(217,138,122,0.03); --glow-h: 40%; }
+  .sky-2 { background: var(--dawn-2); --edge: #3b4a6b; --glow-a: rgba(232,160,76,0.11); --glow-b: rgba(217,138,122,0.06); --glow-h: 46%; }
+  .sky-3 { background: var(--dawn-3); --edge: #5a5f8f; --glow-a: rgba(232,160,76,0.17); --glow-b: rgba(217,138,122,0.10); --glow-h: 52%; }
+  .sky-4 { background: var(--dawn-4); --edge: #8a6f8a; --glow-a: rgba(232,160,76,0.26); --glow-b: rgba(217,138,122,0.16); --glow-h: 60%; }
+  .sky-5 { background: var(--dawn-5); --edge: var(--rose); --glow-a: rgba(232,160,76,0.42); --glow-b: rgba(217,138,122,0.24); --glow-h: 70%; }
+
+  /* 지평선 아래에서 올라오는 빛 — 하루가 갈수록 높고 진해진다 */
+  .glow {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: var(--glow-h, 40%); pointer-events: none; z-index: 0;
+    background: radial-gradient(125% 100% at 50% 102%,
+      var(--glow-a) 0%, var(--glow-b) 38%, rgba(0,0,0,0) 74%);
+  }
+  /* 지평선 — 화면 맨 아래 1px 빛 띠 */
+  .horizon {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 2px; z-index: 4;
+    background: linear-gradient(90deg, rgba(0,0,0,0) 0%, var(--edge, #2b3550) 22%, var(--edge, #2b3550) 78%, rgba(0,0,0,0) 100%);
+    opacity: 0.9;
+  }
+
+  .slide-inner { position: relative; z-index: 1; width: 100%; max-width: 1240px; margin: 0 auto; }
+
+  /* ── 표지 ── */
+  .cover { display: grid; grid-template-rows: auto 1fr auto; gap: 24px; width: 100%; height: 100%; }
+  .cover-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .cover-mid { display: flex; flex-direction: column; justify-content: center; }
+
+  .eyebrow {
+    display: inline-block;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(12px, 1.05vw, 15px); letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .eyebrow.amber { color: var(--amber); }
+  .eyebrow.dot::before {
+    content: ""; display: inline-block;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--amber); margin-right: 10px; vertical-align: middle;
+  }
+
+  .display-2xl {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(58px, 7.8vw, 118px);
+    line-height: 1.04; letter-spacing: -0.032em; color: var(--ivory);
+  }
+  .display-md {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(26px, 3vw, 42px);
+    line-height: 1.24; letter-spacing: -0.018em; color: var(--ivory);
+  }
+  .lead {
+    margin-top: 26px; max-width: 660px;
+    font-family: var(--font-sans); font-weight: 400;
+    font-size: clamp(16px, 1.55vw, 21px); line-height: 1.62; color: var(--muted);
+  }
+
+  /* 표지 5일 카드 스트립 (linear 규율: surface-1 + 헤어라인, 그림자 없음) */
+  .day-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .day-card {
+    padding: 16px 14px 14px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+  }
+  .day-card:hover { background: var(--surface-2); border-color: var(--hairline-strong); }
+  .day-card:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .day-card .num {
+    display: block;
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 26px; line-height: 1; color: var(--amber); margin-bottom: 10px;
+  }
+  .day-card .ttl {
+    display: block;
+    font-family: var(--font-sans); font-weight: 600;
+    font-size: 14px; line-height: 1.4; color: var(--ivory);
+  }
+  .day-card .scrip {
+    display: block; margin-top: 8px;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+  }
+
+  /* ── (a) 구절 카드 ── */
+  .verse {
+    display: grid; grid-template-rows: auto 1fr auto; gap: clamp(20px, 3vh, 40px);
+    width: 100%; height: 100%;
+    text-align: center;
+  }
+  .day-mark { display: flex; align-items: baseline; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .day-mark .day-num {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(30px, 3.2vw, 46px); line-height: 1; color: var(--amber);
+    letter-spacing: -0.02em;
+  }
+  .day-mark .day-ttl {
+    font-family: var(--font-sans); font-weight: 600;
+    font-size: clamp(15px, 1.4vw, 19px); color: var(--ivory);
+  }
+  .day-mark .day-when {
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(12px, 1.1vw, 15px); letter-spacing: 0.08em; color: var(--muted);
+  }
+  .verse .scripture { display: flex; flex-direction: column; justify-content: center; }
+  .scripture .quote {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(24px, 3.5vw, 52px);
+    line-height: 1.42; letter-spacing: -0.018em; color: var(--ivory);
+    max-width: 24em; margin: 0 auto;
+  }
+  .scripture .cite {
+    margin-top: clamp(18px, 2.4vh, 30px);
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(12px, 1.1vw, 15px); letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--amber);
+  }
+
+  /* 새벽 진행 표시 — 5칸 중 오늘까지 차오른다 */
+  .dawn-meter { display: flex; justify-content: center; gap: 8px; }
+  .dawn-meter i {
+    display: block; width: clamp(28px, 4vw, 52px); height: 3px; border-radius: 999px;
+    background: rgba(255,255,255,0.14);
+  }
+  .dawn-meter i.on { background: var(--amber); }
+
+  /* ── (b) 묵상 + 적용 ── */
+  .reflect { display: grid; grid-template-rows: auto auto auto 1fr; gap: clamp(12px, 1.9vh, 24px); width: 100%; }
+  .reflect-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--hairline); padding-bottom: 12px;
+  }
+  .ref-mini {
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(12px, 1.1vw, 15px); letter-spacing: 0.1em; color: var(--amber);
+  }
+  .key-line {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(26px, 3.4vw, 48px);
+    line-height: 1.18; letter-spacing: -0.026em; color: var(--ivory);
+  }
+  .key-line em { font-style: normal; color: var(--amber); }
+  .cards { display: grid; grid-template-columns: 1.35fr 1fr; gap: clamp(12px, 1.3vw, 20px); align-items: stretch; }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    padding: clamp(14px, 1.6vw, 22px);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card.lift { background: var(--surface-2); border-color: var(--hairline-strong); }
+  .card-label {
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(11px, 1vw, 13px); letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .card.lift .card-label { color: var(--amber); }
+  .question {
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(14px, 1.3vw, 18px); line-height: 1.6; color: var(--ivory);
+  }
+  .prayer {
+    font-family: var(--font-display); font-weight: 700; font-style: italic;
+    font-size: clamp(14px, 1.3vw, 18px); line-height: 1.55; color: var(--amber-soft);
+  }
+  /* ── 주일 말씀 발췌 — 목사님의 육성 ──
+     성경 봉독 블록(.scripture, 명조 · 중앙 정렬 · 큰 활자)과 의도적으로 다르게 다룬다:
+     산세리프 본문 · 좌측 정렬 · 앰버 세로선 + 여는 따옴표 장식 · 한 단계 밝은 카드 표면
+     (linear 규율: 배경 대비 표면 리프트 + 헤어라인, 그림자 없음) */
+  .sermon {
+    display: grid; grid-template-columns: auto 1fr;
+    gap: clamp(10px, 1.2vw, 18px);
+    align-items: start; text-align: left;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-left: 3px solid var(--amber);
+    border-radius: 14px;
+    padding: clamp(13px, 1.5vw, 20px) clamp(15px, 1.7vw, 24px);
+  }
+  .sermon-mark {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(34px, 3.6vw, 54px); line-height: 0.78;
+    color: var(--amber); opacity: 0.38; user-select: none;
+  }
+  .sermon-body { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .sermon-label {
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(11px, 1vw, 13px); letter-spacing: 0.14em; color: var(--amber);
+  }
+  .sermon-quote {
+    font-family: var(--font-sans); font-weight: 500;
+    font-size: clamp(14px, 1.3vw, 18px); line-height: 1.62; color: var(--ivory);
+  }
+
+  /* ── 12. 해돋이 축복 ── */
+  .sunrise {
+    background:
+      radial-gradient(140% 92% at 50% 106%,
+        #ffe6b8 0%, #f6c078 24%, var(--amber) 44%, var(--rose) 64%, #8a6a72 84%, var(--dawn-4) 100%);
+    --edge: var(--amber);
+    color: var(--ink-warm);
+  }
+  .sunrise .eyebrow { color: rgba(58,36,21,0.66); }
+  /* 밝은 해돋이 위에서는 같은 규율을 반전 적용 — 배경보다 한 단계 밝은 흰 베일 + 웜 잉크 */
+  .sunrise .sermon {
+    background: rgba(255,255,255,0.30);
+    border-color: rgba(58,36,21,0.14);
+    border-left-color: #8a4d12;
+    margin: 0 auto clamp(22px, 3vh, 34px);
+    max-width: 780px;
+  }
+  .sunrise .sermon-mark { color: #8a4d12; opacity: 0.42; }
+  .sunrise .sermon-label { color: #6b3a12; }
+  .sunrise .sermon-quote { color: var(--ink-warm); }
+  .closing-prayer {
+    font-family: var(--font-display); font-weight: 700; font-style: italic;
+    font-size: clamp(23px, 2.7vw, 38px); line-height: 1.52; color: var(--ink-warm);
+  }
+  .closing-prayer strong { font-weight: 800; font-style: normal; color: #6b3a12; }
+  .amen {
+    margin-top: clamp(24px, 3.4vh, 40px);
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: clamp(13px, 1.2vw, 17px); letter-spacing: 0.2em; color: rgba(58,36,21,0.72);
+  }
+
+  /* ── 코너 · 내비 ── */
+  .corner {
+    position: absolute; bottom: 22px; z-index: 5;
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(58,36,21,0.6); pointer-events: none;
+  }
+  .deck.dark-mode .corner { color: rgba(246,241,231,0.5); }
+  .corner.left { left: clamp(36px, 5vw, 80px); }
+  .corner.right { right: clamp(36px, 5vw, 80px); font-variant-numeric: tabular-nums; }
+
+  .nav-zone { position: absolute; top: 0; bottom: 0; width: 18%; z-index: 30; cursor: pointer; }
+  .nav-zone.left { left: 0; }
+  .nav-zone.right { right: 0; }
+  .nav-zone .arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 8px;
+    background: rgba(58,36,21,0.10); color: var(--ink-warm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; opacity: 0; transition: opacity 0.25s;
+  }
+  .nav-zone.left .arrow { left: 16px; }
+  .nav-zone.right .arrow { right: 16px; }
+  .nav-zone:hover .arrow { opacity: 1; }
+  .deck.dark-mode .nav-zone .arrow { background: rgba(255,255,255,0.10); color: var(--ivory); }
+
+  .build { opacity: 0; transform: translateY(14px); transition: opacity 0.55s ease, transform 0.55s cubic-bezier(.2,.7,.3,1); }
+  .slide.is-current .build { opacity: 1; transform: translateY(0); }
+  .slide.is-current .build:nth-of-type(1) { transition-delay: 0.05s; }
+  .slide.is-current .build:nth-of-type(2) { transition-delay: 0.18s; }
+  .slide.is-current .build:nth-of-type(3) { transition-delay: 0.32s; }
+  .slide.is-current .build:nth-of-type(4) { transition-delay: 0.46s; }
+  .slide.is-current .build:nth-of-type(5) { transition-delay: 0.6s; }
+
+  @media (max-width: 833px) {
+    .stage { background: var(--night); }
+    .deck { aspect-ratio: auto; width: 100vw; height: 100dvh; max-height: 100dvh; }
+    @supports not (height: 100dvh) { .deck { height: 100vh; max-height: 100vh; } }
+    .slide {
+      padding: 48px 22px calc(72px + env(safe-area-inset-bottom));
+      align-items: flex-start;
+    }
+
+    .display-2xl { font-size: clamp(42px, 11.5vw, 62px); }
+    .display-md { font-size: clamp(21px, 5.6vw, 28px); }
+    .lead { font-size: clamp(15px, 3.9vw, 18px); margin-top: 20px; }
+
+    .day-strip { grid-template-columns: 1fr; gap: 8px; }
+    .day-card {
+      padding: 12px 14px;
+      display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px;
+    }
+    .day-card .num { font-size: 22px; margin-bottom: 0; }
+    .day-card .ttl { font-size: 14px; }
+    .day-card .scrip { margin-top: 0; font-size: 10px; }
+
+    .verse { gap: 22px; }
+    .day-mark { gap: 10px; }
+    .day-mark .day-num { font-size: clamp(26px, 8vw, 36px); }
+    .day-mark .day-ttl { font-size: clamp(14px, 4vw, 17px); }
+    .day-mark .day-when { font-size: clamp(11px, 3.2vw, 13px); }
+    .scripture .quote { font-size: clamp(21px, 5.8vw, 30px); line-height: 1.5; }
+    .scripture .cite { font-size: clamp(11px, 2.9vw, 13px); }
+    .dawn-meter i { width: 34px; }
+
+    .reflect { gap: 14px; }
+    .key-line { font-size: clamp(22px, 5.8vw, 32px); }
+    .cards { grid-template-columns: 1fr; gap: 10px; }
+    .card { padding: 14px 16px; border-radius: 12px; }
+    .question { font-size: clamp(14px, 3.7vw, 17px); }
+    .prayer { font-size: clamp(14px, 3.7vw, 17px); }
+
+    .sermon { gap: 10px; padding: 13px 15px; border-radius: 12px; }
+    .sermon-mark { font-size: 30px; }
+    .sermon-label { font-size: 11px; letter-spacing: 0.12em; }
+    .sermon-quote { font-size: clamp(14px, 3.7vw, 17px); line-height: 1.6; }
+    .sunrise .sermon { margin-bottom: 22px; }
+
+    .closing-prayer { font-size: clamp(19px, 4.9vw, 25px); }
+
+    .corner { font-size: 11px; bottom: calc(20px + env(safe-area-inset-bottom)); letter-spacing: 0.06em; }
+    .corner.left { left: 16px; max-width: 60%; }
+    .corner.right { right: 16px; }
+
+    .nav-zone { width: 14%; }
+    .nav-zone .arrow { width: 36px; height: 36px; font-size: 16px; }
+  }
+  @media (max-width: 833px) and (orientation: landscape) {
+    .slide { padding: 22px 32px 40px; align-items: center; }
+    .display-2xl { font-size: clamp(34px, 7.6vw, 52px); }
+    .verse { gap: 14px; }
+    .scripture .quote { font-size: clamp(19px, 4.4vw, 28px); }
+    .key-line { font-size: clamp(20px, 4.4vw, 30px); }
+    .reflect { gap: 10px; }
+    .sermon { padding: 10px 14px; gap: 10px; }
+    .sermon-mark { font-size: 26px; }
+    .sermon-quote { font-size: clamp(13px, 2.6vw, 16px); line-height: 1.55; }
+    .cards { grid-template-columns: 1.35fr 1fr; gap: 12px; }
+    .day-strip { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .day-card { display: block; padding: 10px 12px; }
+    .day-card .num { margin-bottom: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="deck" id="deck">
+    <div class="corner left">넘어져도, 돌아갈 곳 · 5일 묵상</div>
+    <div class="corner right"><span id="curIdx">1</span> / <span id="totIdx">12</span></div>
+    <div class="nav-zone left" id="navLeft"><div class="arrow">←</div></div>
+    <div class="nav-zone right" id="navRight"><div class="arrow">→</div></div>
+
+    <div class="reel" id="reel">
+
+      <!-- 1. 표지 — 심야 -->
+      <section class="slide sky-cover" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner cover">
+          <div class="cover-top build">
+            <span class="eyebrow dot">사도신경 강해 18</span>
+            <span class="eyebrow">새벽 5일 묵상</span>
+          </div>
+          <div class="cover-mid">
+            <h1 class="display-2xl build">넘어져도,<br/>돌아갈 곳이<br/>있습니다.</h1>
+            <p class="lead build">
+              "죄를 용서받는 것을 믿습니다." — 박해 후 돌아온 사람들의 자리에서 태어난 한 줄.
+              가장 어두운 시간에 시작해, 닷새 뒤 해가 뜨는 자리까지 함께 걸어갑니다.
+            </p>
+          </div>
+          <div class="day-strip build">
+            <div class="day-card" data-goto="1" role="button" tabindex="0">
+              <span class="num">01</span>
+              <span class="ttl">돌아온 사람들.</span>
+              <span class="scrip">약 4:6</span>
+            </div>
+            <div class="day-card" data-goto="3" role="button" tabindex="0">
+              <span class="num">02</span>
+              <span class="ttl">단번에 끝난 용서.</span>
+              <span class="scrip">요일 1:9</span>
+            </div>
+            <div class="day-card" data-goto="5" role="button" tabindex="0">
+              <span class="num">03</span>
+              <span class="ttl">나도 넘어질 수 있다.</span>
+              <span class="scrip">고전 10:12</span>
+            </div>
+            <div class="day-card" data-goto="7" role="button" tabindex="0">
+              <span class="num">04</span>
+              <span class="ttl">그분의 신실함.</span>
+              <span class="scrip">딤후 2:13</span>
+            </div>
+            <div class="day-card" data-goto="9" role="button" tabindex="0">
+              <span class="num">05</span>
+              <span class="ttl">같은 은혜 위에.</span>
+              <span class="scrip">롬 3:23-24</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. DAY 01 (a) 구절 — 심야 #0e1220 -->
+      <section class="slide sky-1" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner verse">
+          <div class="day-mark build">
+            <span class="day-num">01</span>
+            <span class="day-ttl">돌아온 사람들</span>
+            <span class="day-when">월요일 새벽</span>
+          </div>
+          <div class="scripture build">
+            <p class="quote">"하나님께서는 교만한 자들을 물리치시고, 겸손한 사람들에게 은혜를 주신다."</p>
+            <p class="cite">야고보서 4:6</p>
+          </div>
+          <div class="dawn-meter build" aria-hidden="true">
+            <i class="on"></i><i></i><i></i><i></i><i></i>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. DAY 01 (b) 묵상 + 적용 -->
+      <section class="slide sky-1" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner reflect">
+          <div class="reflect-head build">
+            <span class="eyebrow amber">Day 01 · 묵상과 적용</span>
+            <span class="ref-mini">야고보서 4:6</span>
+          </div>
+          <p class="key-line build">
+            교회는, 넘어진 사람도<br/>
+            <em>다시 안아주는 곳</em>입니다.
+          </p>
+          <figure class="sermon build">
+            <span class="sermon-mark" aria-hidden="true">&ldquo;</span>
+            <div class="sermon-body">
+              <figcaption class="sermon-label">주일 말씀 중에서</figcaption>
+              <p class="sermon-quote">"교회는 도대체 어떤 곳인가? 한 번도 넘어진 적 없는 사람들만 모인 곳인가? 아니면 넘어지고, 연약하고, 흔들리는 사람들에게도 열려 있는 곳인가?"</p>
+            </div>
+          </figure>
+          <div class="cards">
+            <div class="card build">
+              <span class="card-label">오늘의 질문</span>
+              <p class="question">내가 마음에서 밀어내고 있는 사람은 누구입니까? 그도 같은 은혜 안에 있다면, 어떻게 다르게 보일까요?</p>
+            </div>
+            <div class="card lift build">
+              <span class="card-label">한 줄 기도</span>
+              <p class="prayer">— 누군가의 약함을 정죄로 보지 않게 하소서.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. DAY 02 (a) 구절 — 새벽 3시 #1a2233 -->
+      <section class="slide sky-2" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner verse">
+          <div class="day-mark build">
+            <span class="day-num">02</span>
+            <span class="day-ttl">단번에 끝난 용서</span>
+            <span class="day-when">화요일 새벽</span>
+          </div>
+          <div class="scripture build">
+            <p class="quote">"우리가 우리 죄를 자백하면, 하나님은 신실하시고 의로우신 분이셔서, 우리 죄를 용서하시고 모든 불의에서 우리를 깨끗하게 해주실 것입니다."</p>
+            <p class="cite">요한일서 1:9</p>
+          </div>
+          <div class="dawn-meter build" aria-hidden="true">
+            <i class="on"></i><i class="on"></i><i></i><i></i><i></i>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. DAY 02 (b) 묵상 + 적용 -->
+      <section class="slide sky-2" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner reflect">
+          <div class="reflect-head build">
+            <span class="eyebrow amber">Day 02 · 묵상과 적용</span>
+            <span class="ref-mini">요한일서 1:9</span>
+          </div>
+          <p class="key-line build">
+            용서받기 위해<br/>
+            <em>다시 무엇을 할 필요가 없습니다.</em>
+          </p>
+          <figure class="sermon build">
+            <span class="sermon-mark" aria-hidden="true">&ldquo;</span>
+            <div class="sermon-body">
+              <figcaption class="sermon-label">주일 말씀 중에서</figcaption>
+              <p class="sermon-quote">"넘어진 사람이 돌아왔을 때 다시 세례를 받을 필요는 없습니다. 왜냐하면 죄에 대한 궁극적인 용서는 예수님의 십자가에서 단번에 완성되었기 때문입니다."</p>
+            </div>
+          </figure>
+          <div class="cards">
+            <div class="card build">
+              <span class="card-label">오늘의 질문</span>
+              <p class="question">오늘 마음에서 자꾸 떠오르는, 자백하고 싶은 한 가지를 정직하게 꺼내 놓으시겠습니까?</p>
+            </div>
+            <div class="card lift build">
+              <span class="card-label">한 줄 기도</span>
+              <p class="prayer">— 십자가에서 이미 다 이루셨음을 믿습니다.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. DAY 03 (a) 구절 — 물빛 하늘 #2a3350 -->
+      <section class="slide sky-3" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner verse">
+          <div class="day-mark build">
+            <span class="day-num">03</span>
+            <span class="day-ttl">나도 넘어질 수 있다</span>
+            <span class="day-when">수요일 새벽</span>
+          </div>
+          <div class="scripture build">
+            <p class="quote">"그러므로 서 있다고 생각하는 사람은 넘어지지 않도록 조심하십시오."</p>
+            <p class="cite">고린도전서 10:12</p>
+          </div>
+          <div class="dawn-meter build" aria-hidden="true">
+            <i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. DAY 03 (b) 묵상 + 적용 -->
+      <section class="slide sky-3" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner reflect">
+          <div class="reflect-head build">
+            <span class="eyebrow amber">Day 03 · 묵상과 적용</span>
+            <span class="ref-mini">고린도전서 10:12</span>
+          </div>
+          <p class="key-line build">
+            내 강함이 아니라,<br/>
+            <em>은혜 위에 서 있는 것</em>입니다.
+          </p>
+          <figure class="sermon build">
+            <span class="sermon-mark" aria-hidden="true">&ldquo;</span>
+            <div class="sermon-body">
+              <figcaption class="sermon-label">주일 말씀 중에서</figcaption>
+              <p class="sermon-quote">"나는 절대 넘어지지 않을 것이라고 생각하는 그 마음 자체가 이미 위험한 것입니다."</p>
+            </div>
+          </figure>
+          <div class="cards">
+            <div class="card build">
+              <span class="card-label">오늘의 질문</span>
+              <p class="question">내가 "나는 절대 그러지 않을 거야"라고 말하는 영역은 어디입니까? 그 자리도 은혜임을 인정하면 무엇이 달라집니까?</p>
+            </div>
+            <div class="card lift build">
+              <span class="card-label">한 줄 기도</span>
+              <p class="prayer">— 제가 서 있는 자리도 은혜임을 알게 하소서.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. DAY 04 (a) 구절 — 여명 보라 #4a4668 -->
+      <section class="slide sky-4" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner verse">
+          <div class="day-mark build">
+            <span class="day-num">04</span>
+            <span class="day-ttl">그분의 신실함</span>
+            <span class="day-when">목요일 새벽</span>
+          </div>
+          <div class="scripture build">
+            <p class="quote">"우리는 신실하지 못하더라도, 그분은 언제나 신실하십니다. 그분은 자기를 부인할 수 없으시기 때문입니다."</p>
+            <p class="cite">디모데후서 2:13</p>
+          </div>
+          <div class="dawn-meter build" aria-hidden="true">
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9. DAY 04 (b) 묵상 + 적용 -->
+      <section class="slide sky-4" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner reflect">
+          <div class="reflect-head build">
+            <span class="eyebrow amber">Day 04 · 묵상과 적용</span>
+            <span class="ref-mini">디모데후서 2:13</span>
+          </div>
+          <p class="key-line build">
+            내가 떠나 있을 때에도<br/>
+            <em>주님은 기다리고 계셨습니다.</em>
+          </p>
+          <figure class="sermon build">
+            <span class="sermon-mark" aria-hidden="true">&ldquo;</span>
+            <div class="sermon-body">
+              <figcaption class="sermon-label">주일 말씀 중에서</figcaption>
+              <p class="sermon-quote">"우리가 떠나 있을 때에도 주님은 기다리고 계십니다. 우리의 신실함이 끊어져도, 그분의 신실함은 끊어지지 않습니다."</p>
+            </div>
+          </figure>
+          <div class="cards">
+            <div class="card build">
+              <span class="card-label">오늘의 질문</span>
+              <p class="question">한때 믿음에서 멀어졌던 시간이 있다면, 거기서도 주님이 어떻게 기다리고 계셨나요?</p>
+            </div>
+            <div class="card lift build">
+              <span class="card-label">한 줄 기도</span>
+              <p class="prayer">— 흔들려도 돌아갈 곳이 당신임을 잊지 않게 하소서.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10. DAY 05 (a) 구절 — 지평선이 붉어짐 #7a5b63 -->
+      <section class="slide sky-5" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner verse">
+          <div class="day-mark build">
+            <span class="day-num">05</span>
+            <span class="day-ttl">같은 은혜 위에</span>
+            <span class="day-when">금요일 새벽</span>
+          </div>
+          <div class="scripture build">
+            <p class="quote">"모든 사람이 죄를 범하였습니다. … 그리스도 예수 안에서 얻는 구원으로 말미암아, 하나님의 은혜로 값없이 의롭다는 선고를 받습니다."</p>
+            <p class="cite">로마서 3:23-24</p>
+          </div>
+          <div class="dawn-meter build" aria-hidden="true">
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11. DAY 05 (b) 묵상 + 적용 -->
+      <section class="slide sky-5" data-bg="dark">
+        <div class="glow"></div>
+        <div class="horizon"></div>
+        <div class="slide-inner reflect">
+          <div class="reflect-head build">
+            <span class="eyebrow amber">Day 05 · 묵상과 적용</span>
+            <span class="ref-mini">로마서 3:23-24</span>
+          </div>
+          <p class="key-line build">
+            강한 사람도 약한 사람도,<br/>
+            <em>모두 같은 은혜 위에</em> 서 있습니다.
+          </p>
+          <figure class="sermon build">
+            <span class="sermon-mark" aria-hidden="true">&ldquo;</span>
+            <div class="sermon-body">
+              <figcaption class="sermon-label">주일 말씀 중에서</figcaption>
+              <p class="sermon-quote">"영적으로 강한 사람이든 약한 사람이든, 오래 믿은 사람이든 방금 돌아온 사람이든, 모두가 같은 은혜 위에 서 있습니다."</p>
+            </div>
+          </figure>
+          <div class="cards">
+            <div class="card build">
+              <span class="card-label">오늘의 질문</span>
+              <p class="question">이번 한 주, 내가 따뜻하게 품을 한 사람은 누구입니까?</p>
+            </div>
+            <div class="card lift build">
+              <span class="card-label">한 줄 기도</span>
+              <p class="prayer">— 같은 은혜 위에 선 가족임을 잊지 않게 하소서.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12. 해돋이 축복 -->
+      <section class="slide sunrise" data-bg="light">
+        <div class="horizon"></div>
+        <div class="slide-inner" style="text-align: center; max-width: 900px;">
+          <p class="eyebrow build" style="margin-bottom: 22px;">닷새 뒤, 해가 떴습니다</p>
+          <figure class="sermon build">
+            <span class="sermon-mark" aria-hidden="true">&ldquo;</span>
+            <div class="sermon-body">
+              <figcaption class="sermon-label">주일 말씀 중에서</figcaption>
+              <p class="sermon-quote">"겸손하게, 나도 넘어질 수 있는 존재임을 알고.<br/>담대하게, 넘어져도 돌아갈 곳이 있음을 알고.<br/>따뜻하게, 돌아오는 자를 품는 공동체의 일원으로 살아가시기를 바랍니다."</p>
+            </div>
+          </figure>
+          <p class="closing-prayer build">
+            예수님,<br/>
+            같은 은혜 위에 선 가족임을 잊지 않게 하소서.<br/>
+            <strong>겸손하게, 담대하게, 따뜻하게</strong> 살아가게 하소서.
+          </p>
+          <p class="amen build">— 아 멘 .</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const deck = document.getElementById("deck");
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const total = slides.length;
+  const curEl = document.getElementById("curIdx");
+  const totEl = document.getElementById("totIdx");
+  totEl.textContent = total;
+  let cur = 0;
+  function applyMode() {
+    const isDark = (slides[cur].dataset.bg || "light") === "dark";
+    deck.classList.toggle("dark-mode", isDark);
+  }
+  function snapPositions(activeIdx) {
+    slides.forEach((s, i) => {
+      s.classList.remove("is-current", "is-prev", "is-next", "is-animating");
+      if (i === activeIdx) s.classList.add("is-current");
+      else if (i < activeIdx) s.classList.add("is-prev");
+      else s.classList.add("is-next");
+    });
+  }
+  function go(idx, push = true) {
+    idx = Math.max(0, Math.min(total - 1, idx));
+    if (idx === cur && slides[cur].classList.contains("is-current")) return;
+    const dir = idx >= cur ? "fwd" : "back";
+    const oldCur = cur;
+    slides.forEach((s, i) => {
+      if (i === oldCur || i === idx) return;
+      s.classList.remove("is-current", "is-prev", "is-next", "is-animating");
+      if (i < idx) s.classList.add("is-prev");
+      else s.classList.add("is-next");
+    });
+    const out = slides[oldCur], inc = slides[idx];
+    out.classList.add("is-animating"); inc.classList.add("is-animating");
+    requestAnimationFrame(() => {
+      out.classList.remove("is-current");
+      out.classList.add(dir === "fwd" ? "is-prev" : "is-next");
+      inc.classList.remove("is-prev", "is-next");
+      inc.classList.add("is-current");
+    });
+    cur = idx;
+    curEl.textContent = cur + 1;
+    applyMode();
+    if (push) history.replaceState(null, "", `#${cur + 1}`);
+  }
+  const initialHash = parseInt(location.hash.replace("#", ""), 10);
+  const startIdx = Number.isFinite(initialHash) && initialHash >= 1 ? Math.min(initialHash - 1, total - 1) : 0;
+  cur = startIdx;
+  snapPositions(startIdx);
+  curEl.textContent = cur + 1;
+  applyMode();
+  function next() { go(cur + 1); }
+  function prev() { go(cur - 1); }
+  document.addEventListener("keydown", (e) => {
+    switch (e.key) {
+      case "ArrowRight": case " ": case "PageDown": e.preventDefault(); next(); break;
+      case "ArrowLeft": case "PageUp": e.preventDefault(); prev(); break;
+      case "Home": e.preventDefault(); go(0); break;
+      case "End": e.preventDefault(); go(total - 1); break;
+      case "f": case "F":
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+        break;
+    }
+  });
+  document.getElementById("navLeft").addEventListener("click", prev);
+  document.getElementById("navRight").addEventListener("click", next);
+
+  // 표지의 day 카드 → 그날의 (a) 구절 카드로 점프 (슬라이드 인덱스 1,3,5,7,9)
+  document.querySelectorAll(".day-card[data-goto]").forEach(tile => {
+    const handler = (e) => {
+      e.preventDefault();
+      go(parseInt(tile.dataset.goto, 10));
+    };
+    tile.addEventListener("click", handler);
+    tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") handler(e);
+    });
+  });
+  let tx = null;
+  deck.addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; }, { passive: true });
+  deck.addEventListener("touchend", (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 60) (dx < 0 ? next : prev)();
+    tx = null;
+  });
+</script>
+</body>
+</html>

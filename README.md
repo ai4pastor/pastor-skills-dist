@@ -1,6 +1,7 @@
 # pastor-skills
 
-목회자를 위한 Claude Code 스킬입니다. 설교를 Obsidian에 정리하고, 설교 준비를 돕습니다.
+목회자를 위한 Claude Code 스킬입니다. 설교를 Obsidian에 정리하고, 설교 준비를 돕고,
+설교 영상으로 유튜브 쇼츠를 만듭니다.
 
 ## 설치하기
 
@@ -35,11 +36,14 @@ Claude가 알아서 설치해 드립니다. 명령어를 외우실 필요 없습
 | `pastor-sermon-import` | 같은 일을 하지만 형식·병합·검증 규칙을 직접 정하실 수 있습니다. 설정은 basic과 호환됩니다. |
 | `pastor-sermon-lab` | 본문 연구 노트, 설교 초안 진단, 완성 설교 보강 자료를 만듭니다. |
 | `pastor-devotion` | 설교 한 편을 성도들이 월~금 매일 붙드는 **5일 묵상 HTML 한 장**으로 만듭니다. 디자인 시안 7종, 매일 설교 원문 발췌("주일 말씀 중에서")가 들어갑니다. 카톡에 파일만 올리면 폰·PC 어디서든 열립니다. |
+| `pastor-shorts` | 설교 영상(유튜브 주소나 영상 파일)에서 쇼츠로 쓸 만한 구간을 추려 **세로 쇼츠**로 만듭니다. 대본은 컴퓨터 안에서 만들고(외부 유료 서비스 없음), 군더더기 말·긴 쉼을 정리하고, 교정 자막과 함께 디자인 시안 4종(클래식·아이보리·시네마틱·말씀 카드) 가운데 하나로 위아래 틀을 붙입니다. 업로드는 목사님이 직접 하십니다. |
 
 설교 한 편에서 만들어지는 것 — 원본이 그대로 보존된 메인 노트 1개,
 논지·해석·예화·적용 단위로 나뉜 설교 조각 노트 여러 개(예화는 `💡` 표시),
 그리고 설교에 나온 모든 성경구절 링크(`[[요3_16]]`).
-묵상자료가 필요하면 "이 설교로 5일 묵상 만들어줘"라고 하시면 됩니다.
+묵상자료가 필요하면 "이 설교로 5일 묵상 만들어줘"라고, 쇼츠가 필요하면
+"이 설교 영상으로 쇼츠 만들어줘"라고 하시면 됩니다. 쇼츠는 처음 한 번 영상 도구를 설치합니다
+(약 1GB + 음성 인식 모델 약 1.5GB, 시스템은 건드리지 않음 — Claude가 여쭤보고 설치합니다).
 
 ## 쓰는 법
 
@@ -71,7 +75,8 @@ Claude가 알아서 설치해 드립니다. 명령어를 외우실 필요 없습
 
 Claude가 **나만의 규칙 파일**(`~/.pastor-sermon-import/custom_rules.md`)을 만들어 드립니다.
 묵상자료도 마찬가지입니다 — "묵상은 항상 장년 대상, poster 시안으로 해줘"라고 하시면
-묵상 전용 규칙 파일(`devotion_rules.md`)을 만들어 드립니다.
+묵상 전용 규칙 파일(`devotion_rules.md`)을, 쇼츠도 "항상 1번 시안, 윗줄은 우리 교회 이름으로"라고 하시면
+쇼츠 규칙 파일(`shorts_rules.md`)을 만들어 드립니다.
 이후 모든 정리에 그 규칙이 우선 적용되고, **플러그인을 업데이트해도 그대로 유지됩니다.**
 스킬 파일을 직접 고치실 필요가 없습니다 (직접 고치면 업데이트 때 사라집니다).
 
@@ -140,14 +145,14 @@ TMP=$(mktemp -d)
 git clone --depth 1 https://github.com/ai4pastor/pastor-skills-dist "$TMP/pastor-skills"
 mkdir -p ~/.claude/skills
 cp -R "$TMP/pastor-skills/skills/." ~/.claude/skills/
-ls ~/.claude/skills/ | grep pastor-sermon
+ls ~/.claude/skills/ | grep pastor-
 ```
 
-세 폴더(`pastor-sermon-basic`, `pastor-sermon-import`, `pastor-sermon-lab`)가
-보이면 설치된 것입니다. Claude Code를 다시 시작하면 스킬 목록에 나타납니다.
+다섯 폴더(`pastor-sermon-basic`, `pastor-sermon-import`, `pastor-sermon-lab`,
+`pastor-devotion`, `pastor-shorts`)가 보이면 설치된 것입니다. Claude Code를 다시 시작하면 스킬 목록에 나타납니다.
 
 **주의: 1단계와 2단계를 모두 하지 마세요.** 같은 스킬이 두 개로 보입니다.
-2단계로 설치했다가 나중에 플러그인으로 바꾸시려면 `~/.claude/skills/pastor-sermon-*`
+2단계로 설치했다가 나중에 플러그인으로 바꾸시려면 `~/.claude/skills/pastor-*`
 폴더를 먼저 정리해야 합니다. 설정 파일(`~/.pastor-sermon-import/`)은 지우지 마세요.
 
 **3단계 — 설치 후**

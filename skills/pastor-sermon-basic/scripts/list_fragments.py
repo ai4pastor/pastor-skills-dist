@@ -29,6 +29,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config_loader import load_config  # noqa: E402
 from note_utils import compare_key, ensure_relative_folder, nfc  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 
 def collect(config: dict, limit: int, sort: str) -> dict:
     vault = Path(config["vault"]["path"]).expanduser()

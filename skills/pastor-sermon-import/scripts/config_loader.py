@@ -231,5 +231,9 @@ def validate_config(config: dict[str, Any]) -> None:
 
 if __name__ == "__main__":
     import sys
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+    except (AttributeError, ValueError):
+        pass
     cfg = load_config(sys.argv[1]) if len(sys.argv) > 1 else default_config()
     print(json.dumps(cfg, ensure_ascii=False, indent=2))

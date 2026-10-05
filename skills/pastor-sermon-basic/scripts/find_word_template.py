@@ -24,6 +24,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from note_utils import nfc  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 MAX_DEPTH = 4
 MAX_NOTE_BYTES = 400_000
 MAX_NOTES_PER_FOLDER = 200

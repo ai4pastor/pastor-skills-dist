@@ -21,6 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config_loader import HOME_ENV_VAR, config_path, home, work_dir  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 
 def resolve(vault_path: str | None = None) -> dict[str, object]:
     base = home()

@@ -10,6 +10,11 @@ from typing import Any
 
 from config_loader import default_config, load_config
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 # 표준 성경 약어 66권 (수강생 공통 성경구절 노트 파일명과 일치)
 VALID_BOOKS = {
     "창", "출", "레", "민", "신", "수", "삿", "룻",

@@ -32,6 +32,11 @@ from config_loader import DIAGNOSIS_DIMENSIONS, LOG_DIR, default_config, load_me
 from extract_bible_refs import extract as extract_refs
 from note_utils import format_frontmatter, sanitize_title
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 MODES = {
     "research": {"note_type": "연구노트", "pattern": "{date}_연구_{topic}"},
     "diagnose": {"note_type": "진단노트", "pattern": "{date}_진단_{title}"},

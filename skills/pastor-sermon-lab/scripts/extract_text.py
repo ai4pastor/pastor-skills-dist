@@ -16,6 +16,11 @@ import shutil
 import subprocess
 import sys
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 SUPPORTED = {".docx", ".md", ".txt"}
 TEXT_ENCODINGS = ("utf-8", "utf-8-sig", "cp949", "euc-kr")
 
@@ -59,7 +64,9 @@ def extract_docx(path: Path) -> tuple[str, str]:
     if not pandoc:
         return extract_docx_python_docx(path)
     # gfm keeps headings/lists better than plain text, which improves fragment splitting.
-    result = subprocess.run([pandoc, "-t", "gfm", str(path)], check=True, text=True, capture_output=True)
+    # pandoc 출력은 항상 UTF-8 — 한국어 윈도우 기본값(cp949)으로 읽으면 UnicodeDecodeError 로 멈춘다.
+    result = subprocess.run([pandoc, "-t", "gfm", str(path)], check=True, text=True, capture_output=True,
+                            encoding="utf-8", errors="replace")
     return result.stdout, "pandoc-gfm"
 
 

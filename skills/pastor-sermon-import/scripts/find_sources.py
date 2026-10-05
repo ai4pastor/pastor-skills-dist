@@ -23,6 +23,11 @@ import platform
 import sys
 import time
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 DOC_SUFFIXES = {".docx", ".doc", ".hwp", ".hwpx", ".pdf", ".txt", ".md", ".rtf", ".odt", ".pages"}
 READABLE_SUFFIXES = {".docx", ".hwp", ".hwpx", ".pdf", ".txt", ".md"}
 SERMON_WORDS = ("설교", "말씀", "주일", "예배", "기도회", "새벽", "수요", "금요", "강해",

@@ -24,6 +24,11 @@ import sys
 from config_loader import default_config
 from extract_bible_refs import extract as extract_refs
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 GRADE_EMOJIS = ("✅", "🟡", "⚠️", "❓", "🚫")
 

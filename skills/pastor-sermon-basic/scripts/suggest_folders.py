@@ -21,6 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from find_word_template import search as search_word_template  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 MAX_DEPTH = 3
 SKIP_DIRS = {".obsidian", ".trash", ".git", "node_modules", ".vault-sermon-import", "__pycache__"}
 

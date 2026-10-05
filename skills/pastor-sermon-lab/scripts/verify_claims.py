@@ -35,6 +35,11 @@ import json
 import sys
 from typing import Any
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 GRADES = {"확인됨", "개연", "논쟁중", "불확실", "사용금지"}

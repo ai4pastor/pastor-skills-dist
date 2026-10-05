@@ -31,6 +31,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config_loader import work_dir  # noqa: E402
 from ensure_tools import activate_pylibs  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 SUPPORTED = {".docx", ".md", ".txt", ".pdf", ".hwpx", ".hwp"}
 TEXT_ENCODINGS = ("utf-8", "utf-8-sig", "cp949", "euc-kr")
 # 페이지당 이만큼도 안 나오면 글자가 없는 스캔 이미지로 본다.
@@ -83,7 +88,9 @@ def extract_docx(path: Path) -> tuple[str, str]:
     if not pandoc:
         return extract_docx_python_docx(path)
     # gfm keeps headings/lists better than plain text, which improves fragment splitting.
-    result = subprocess.run([pandoc, "-t", "gfm", str(path)], check=True, text=True, capture_output=True)
+    # pandoc 출력은 항상 UTF-8 — 한국어 윈도우 기본값(cp949)으로 읽으면 UnicodeDecodeError 로 멈춘다.
+    result = subprocess.run([pandoc, "-t", "gfm", str(path)], check=True, text=True, capture_output=True,
+                            encoding="utf-8", errors="replace")
     return result.stdout, "pandoc-gfm"
 
 
@@ -93,7 +100,7 @@ def extract_pdf(path: Path) -> tuple[str, str, int]:
         # -layout keeps the manuscript's own line breaks, which the fragment
         # splitter reads as structure.
         result = subprocess.run([pdftotext, "-layout", "-enc", "UTF-8", str(path), "-"],
-                                text=True, capture_output=True, timeout=300)
+                                text=True, capture_output=True, timeout=300, encoding="utf-8", errors="replace")
         if result.returncode == 0:
             return result.stdout, "pdftotext", pdf_page_count(result.stdout, path)
 
@@ -205,11 +212,14 @@ def extract_hwp(path: Path) -> tuple[str, str]:
     env = dict(os.environ)
     if pylibs.is_dir():
         env["PYTHONPATH"] = os.pathsep.join([str(pylibs), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
+    # hwp5txt 는 파이썬 프로그램 — UTF-8 로 쓰게 하고 UTF-8 로 읽는다. 한국어 윈도우 기본값(cp949)이면
+    # 원고에 cp949 밖 글자(— 등)가 있을 때 hwp5txt 가 쓰다가 멈춘다.
+    env["PYTHONIOENCODING"] = "utf-8"
     errors: list[str] = []
     for command, method in hwp5txt_candidates():
         try:
             result = subprocess.run([*command, str(path)], text=True, capture_output=True,
-                                    timeout=300, env=env)
+                                    timeout=300, env=env, encoding="utf-8", errors="replace")
         except (OSError, subprocess.SubprocessError) as exc:
             errors.append(f"{method}: {exc}")
             continue

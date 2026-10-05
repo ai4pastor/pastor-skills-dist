@@ -93,6 +93,11 @@ def load_config(path: str | Path | None = None, vault_path: str | None = None) -
 
 if __name__ == "__main__":
     import argparse
+    import sys
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+    except (AttributeError, ValueError):
+        pass
     parser = argparse.ArgumentParser()
     parser.add_argument("--memory", help="memory.json 경로 (기본 ~/.pastor-sermon-lab/memory.json)")
     parser.add_argument("--remember-vault")

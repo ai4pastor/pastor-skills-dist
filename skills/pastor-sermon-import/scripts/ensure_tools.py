@@ -20,6 +20,7 @@ from pathlib import Path
 import argparse
 import importlib.util
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -28,6 +29,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config_loader import pylibs_dir  # noqa: E402
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
 
 # 형식별 계약. command = 있으면 먼저 쓰는 시스템 도구, module = pip 로 넣을 수 있는 대안.
 FORMATS: dict[str, dict[str, object]] = {
@@ -165,10 +171,15 @@ def check(keys: list[str]) -> dict[str, object]:
     return result
 
 
+# pip 출력을 UTF-8 로 쓰고 읽는다 — 한국어 윈도우 기본값(cp949)이면 한글 사용자 이름 경로 등에서 깨지거나 멈춘다.
+PIP_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+
 def pip_available() -> bool:
     try:
         proc = subprocess.run([sys.executable, "-m", "pip", "--version"],
-                              capture_output=True, text=True, timeout=60)
+                              capture_output=True, text=True, timeout=60,
+                              encoding="utf-8", errors="replace", env=PIP_ENV)
     except (OSError, subprocess.SubprocessError):
         return False
     return proc.returncode == 0
@@ -192,7 +203,8 @@ def install(keys: list[str]) -> dict[str, object]:
            "--disable-pip-version-check", "--prefer-binary",
            "--target", str(target), *packages]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                              encoding="utf-8", errors="replace", env=PIP_ENV)
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": "timeout", "cmd": cmd, "packages": packages,
                 "note": "설치가 10분을 넘겨 중단했습니다. 인터넷 연결을 확인해 주세요."}

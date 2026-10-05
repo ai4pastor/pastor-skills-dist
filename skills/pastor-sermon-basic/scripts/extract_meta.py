@@ -18,6 +18,11 @@ from extract_bible_refs import extract as extract_bible_refs
 from config_loader import default_config, load_config
 from note_utils import compare_key, sanitize_title
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 DATE_PATTERNS = [
     re.compile(r"(?P<date>\d{6})[_\-\s]+(?P<rest>.+)$"),
     re.compile(r"(?P<date>\d{4}[-.]?\d{2}[-.]?\d{2})[_\-\s]+(?P<rest>.+)$"),

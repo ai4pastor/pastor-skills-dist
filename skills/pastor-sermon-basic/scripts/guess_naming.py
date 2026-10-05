@@ -22,6 +22,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from extract_text import SUPPORTED  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 DATE_RES = [
     ("YYMMDD", re.compile(r"^(?P<date>\d{6})(?=[\s_\-])")),
     ("YYYYMMDD", re.compile(r"^(?P<date>\d{8})(?=[\s_\-])")),

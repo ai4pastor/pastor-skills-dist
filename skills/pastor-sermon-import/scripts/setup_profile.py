@@ -8,9 +8,15 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import sys
 from typing import Any
 
 from config_loader import default_config, save_config, validate_config
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
 
 
 def ask(prompt: str, default: str | None = None) -> str:

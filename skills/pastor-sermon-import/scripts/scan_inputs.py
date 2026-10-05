@@ -23,6 +23,11 @@ from ensure_tools import FORMATS, check as check_tools  # noqa: E402
 from extract_text import SUPPORTED  # noqa: E402
 from note_utils import sidecar_reason  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 SKIP_LABELS = {
     "lock_file": "워드가 문서를 열어 둔 동안 만드는 임시 파일입니다",
     "mac_metadata": "macOS가 남긴 메타데이터 파일입니다",

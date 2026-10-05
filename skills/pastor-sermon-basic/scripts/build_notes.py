@@ -38,6 +38,11 @@ from note_utils import (
     unique_name,
 )
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 def collect_inputs(input_path: Path, config: dict[str, Any] | None = None) -> list[Path]:
     """Collect sermon files, honouring input.file_types.
 

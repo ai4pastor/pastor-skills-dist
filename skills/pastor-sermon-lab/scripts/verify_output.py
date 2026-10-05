@@ -24,6 +24,11 @@ import sys
 from config_loader import DIAGNOSIS_DIMENSIONS
 from note_utils import FORBIDDEN_FILENAME_CHARS
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 FRONTMATTER_RE = re.compile(r"\A---\n(?P<body>.*?)\n---(?:\n|\Z)", re.DOTALL)
 NOTE_TYPES = {"연구노트", "진단노트", "보강노트"}
 GRADE_EMOJIS = ("✅", "🟡", "⚠️", "❓", "🚫")

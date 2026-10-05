@@ -34,6 +34,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from note_utils import nfc, strip_vs  # noqa: E402
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 DEFAULT_PREFIXES = {
     "world": "📩 ",
     "world_major": "📖 ",

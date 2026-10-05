@@ -32,6 +32,11 @@ import sys
 from config_loader import load_config
 from note_utils import FORBIDDEN_FILENAME_CHARS, compare_key, strip_vs, strip_wikilink
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # 윈도우에서 파이프로 실행돼도 한글·기호를 출력 (cp949 함정)
+except (AttributeError, ValueError):
+    pass
+
 WIKILINK_RE = re.compile(r"^## \[\[(?P<name>[^\]]+)\]\]", re.MULTILINE)
 FRONTMATTER_RE = re.compile(r"\A---\n(?P<body>.*?)\n---(?:\n|\Z)", re.DOTALL)
 MAIN_NOTE_MARKER = "# 원본 설교문"
